@@ -1,0 +1,46 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                 String       @id @default(cuid())
+  email              String       @unique
+  password           String
+  plan               Plan         @default(FREE)
+  maxSubmissions     Int          @default(50)
+  currentSubmissions Int          @default(0)
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  forms              Form[]
+}
+
+model Form {
+  id               String       @id @default(cuid())
+  name             String
+  userId           String
+  user             User         @relation(fields: [userId], references: [id])
+  destinationEmail String
+  token            String       @unique @default(uuid())
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  submissions      Submission[]
+}
+
+model Submission {
+  id        String   @id @default(cuid())
+  formId    String
+  form      Form     @relation(fields: [formId], references: [id])
+  data      Json
+  createdAt DateTime @default(now())
+}
+
+enum Plan {
+  FREE
+  PREMIUM
+}

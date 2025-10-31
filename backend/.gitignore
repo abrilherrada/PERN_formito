@@ -1,0 +1,16 @@
+# Backend-specific ignores
+node_modules/
+/src/generated/prisma
+dist/
+coverage/
+logs/
+*.tsbuildinfo
+.env
+
+# Prisma
+/prisma/migrations/
+/prisma/.env
+
+# Temporary files
+/tmp
+*.tmp

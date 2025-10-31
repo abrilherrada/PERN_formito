@@ -1,0 +1,50 @@
+services:
+ db:
+  image: postgres:16
+  restart: always
+  environment:
+   POSTGRES_USER: admin
+   POSTGRES_PASSWORD: admin
+   POSTGRES_DB: formito
+  ports:
+   - "5432:5432"
+  volumes:
+   - pgdata:/var/lib/postgresql/data
+  networks:
+   - formito-network
+
+ backend:
+  build: ./backend
+  command: npm run dev
+  environment:
+   DATABASE_URL: postgresql://admin:admin@db:5432/formito?schema=public
+   PORT: 5001
+  ports:
+   - "5001:5001"
+  depends_on:
+   - db
+  volumes:
+   - ./backend:/app
+   - /app/node_modules
+  networks:
+   - formito-network
+
+ frontend:
+  build: ./frontend
+  command: npm run dev -- --host 0.0.0.0
+  ports:
+   - "5173:5173"
+  depends_on:
+   - backend
+  volumes:
+   - ./frontend:/app
+   - /app/node_modules
+  networks:
+   - formito-network
+
+volumes:
+ pgdata:
+
+networks:
+ formito-network:
+  driver: bridge

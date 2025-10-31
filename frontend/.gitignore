@@ -1,0 +1,13 @@
+# Frontend-specific ignores
+node_modules/
+dist/
+dist-ssr/
+*.local
+coverage/
+.cache/
+*.tsbuildinfo
+.env
+
+# Testing
+/coverage
+.nyc_output
