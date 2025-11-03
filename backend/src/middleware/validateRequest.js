@@ -4,9 +4,10 @@ export const validateRequest = (schema, location = 'body') => {
     const result = schema.safeParse(data);
 
     if (!result.success) {
-      const errors = result.error.errors.map((error) => ({
-        field: error.path.join('.'),
-        message: error.message,
+      const zodIssues = result.error.issues ?? result.error.errors ?? [];
+      const errors = zodIssues.map((issue) => ({
+        field: issue.path.join('.'),
+        message: issue.message,
       }));
 
       return res.status(400).json({
