@@ -2,10 +2,10 @@ import { registerService, loginService } from '../services/auth.js';
 
 export const registerUser = async (req, res, next) => {
   try {
-    const user = await registerService(req.validatedData.body);
+    const result = await registerService(req.validatedData.body);
     res
       .status(201)
-      .json(user);
+      .json(result);
   } catch (error) {
     next(error);
   }

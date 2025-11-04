@@ -9,18 +9,35 @@ import {
   UnauthorizedError,
 } from '../utils/errors/httpErrors.js';
 import { handlePrismaError } from '../utils/errors/prismaErrors.js';
+import { createTokenService, deleteTokenService } from './emailVerification.js';
+import { sendVerificationEmail } from './email/sendVerificationEmail.js';
 
 export const registerService = async (data) => {
+  let verificationToken;
+
   try {
     const SALT_ROUNDS = parseInt(process.env.BCRYPT_SALT_ROUNDS, 10) || 12;
     const hashedPassword = await bcrypt.hash(data.password, SALT_ROUNDS);
 
     const user = await registerRepository({ ...data, password: hashedPassword });
 
-    const { password: _password, ...safeUser } = user;
+    verificationToken = await createTokenService(user.id);
 
-    return safeUser;
+    await sendVerificationEmail({ to: user.email, token: verificationToken.token });
+
+    return {
+      userId: user.id,
+      message: 'A verification email has been sent to the set email address.',
+    };
   } catch (error) {
+    if (verificationToken?.id) {
+      try {
+        await deleteTokenService(verificationToken.id);
+      } catch (cleanupError) {
+        console.error('Failed to delete verification token after registration error', cleanupError);
+      }
+    }
+
     throw handlePrismaError(error);
   }
 };
