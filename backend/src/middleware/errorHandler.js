@@ -5,8 +5,15 @@ export const errorHandler = (err, req, res, next) => {
     message: err.message ?? 'Unexpected error',
   };
 
-  if (err.details) {
-    response.details = err.details;
+  const details = err.details ?? {};
+  const { code, ...restDetails } = details;
+
+  if (code) {
+    response.code = code;
+  }
+
+  if (Object.keys(restDetails).length > 0) {
+    response.details = restDetails;
   }
 
   if (process.env.NODE_ENV !== 'production' && err.stack) {
@@ -16,7 +23,8 @@ export const errorHandler = (err, req, res, next) => {
   console.error(`[Error] ${req.method} ${req.originalUrl}`, {
     status,
     message: err.message,
-    details: err.details,
+    code,
+    details: restDetails,
     stack: err.stack,
   });
 

@@ -54,13 +54,17 @@ export const loginService = async (data) => {
     const user = await loginRepository({ email: data.email });
 
     if (!user) {
-      throw new UnauthorizedError('Invalid credentials');
+      throw new UnauthorizedError('Invalid credentials', { code: 'AUTH_INVALID_CREDENTIALS' });
     }
 
     const isValid = await bcrypt.compare(data.password, user.password);
 
     if (!isValid) {
-      throw new UnauthorizedError('Invalid credentials');
+      throw new UnauthorizedError('Invalid credentials', { code: 'AUTH_INVALID_CREDENTIALS' });
+    }
+
+    if (!user.emailVerifiedAt) {
+      throw new UnauthorizedError('Email not verified', { code: 'AUTH_EMAIL_NOT_VERIFIED' });
     }
 
     if (!process.env.JWT_SECRET) {
@@ -86,11 +90,11 @@ export const resendVerificationService = async (email) => {
     const user = await loginRepository({ email });
 
     if (!user) {
-      throw new NotFoundError('User not found');
+      throw new NotFoundError('User not found', { code: 'AUTH_USER_NOT_FOUND' });
     }
 
     if (user.emailVerifiedAt) {
-      throw new BadRequestError('Email already verified');
+      throw new BadRequestError('Email already verified', { code: 'AUTH_EMAIL_ALREADY_VERIFIED' });
     }
 
     verificationToken = await createTokenService(user.id);

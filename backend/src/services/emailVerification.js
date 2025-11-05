@@ -36,7 +36,7 @@ export const findTokenByTokenService = async (tokenString) => {
   const token = await findTokenByTokenRepository(tokenString);
 
   if (!token) {
-    throw new NotFoundError('Token not found');
+    throw new NotFoundError('Token not found', { code: 'EMAIL_TOKEN_NOT_FOUND' });
   }
 
   return token;
@@ -46,15 +46,15 @@ export const consumeTokenService = async (tokenString) => {
   const token = await findTokenByTokenRepository(tokenString);
 
   if (!token) {
-    throw new NotFoundError('Token not found');
+    throw new NotFoundError('Token not found', { code: 'EMAIL_TOKEN_NOT_FOUND' });
   }
 
   if (token.usedAt) {
-    throw new BadRequestError('Token already used');
+    throw new BadRequestError('Token already used', { code: 'EMAIL_TOKEN_ALREADY_USED' });
   }
 
   if (token.expiresAt <= new Date()) {
-    throw new BadRequestError('Token expired');
+    throw new BadRequestError('Token expired', { code: 'EMAIL_TOKEN_EXPIRED' });
   }
 
   await markTokenAsUsedRepository(token.id);

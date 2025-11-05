@@ -2,8 +2,14 @@ import { Prisma } from '@prisma/client';
 import { ConflictError, NotFoundError, InternalServerError } from './httpErrors.js';
 
 const prismaErrorMap = {
-  P2002: ConflictError,
-  P2025: NotFoundError,
+  P2002: {
+    ErrorClass: ConflictError,
+    code: 'CONFLICT_UNIQUE_CONSTRAINT',
+  },
+  P2025: {
+    ErrorClass: NotFoundError,
+    code: 'NOT_FOUND',
+  },
 };
 
 const buildUniqueConstraintMessage = (target) => {
@@ -16,10 +22,17 @@ const buildUniqueConstraintMessage = (target) => {
 
 export const handlePrismaError = (error) => {
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
-    const ErrorClass = prismaErrorMap[error.code];
+    const mapping = prismaErrorMap[error.code];
 
-    if (ErrorClass) {
+    if (mapping) {
+      const { ErrorClass, code } = mapping;
+
       let message = error.message;
+      let details = error.meta ?? {};
+
+      if (code) {
+        details = { ...details, code };
+      }
 
       if (error.code === 'P2002') {
         message = buildUniqueConstraintMessage(error.meta?.target);
@@ -27,10 +40,13 @@ export const handlePrismaError = (error) => {
         message = `${error.meta.target.join(', ')} caused an error`;
       }
 
-      return new ErrorClass(message);
+      return new ErrorClass(message, details);
     }
 
-    return new InternalServerError('Database error', error.meta);
+    return new InternalServerError('Database error', {
+      code: 'DATABASE_KNOWN_ERROR',
+      meta: error.meta,
+    });
   }
 
   return error;
