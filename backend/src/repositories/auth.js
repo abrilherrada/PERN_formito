@@ -9,3 +9,10 @@ export const loginRepository = async (data) => {
     where: { email: data.email }
   });
 };
+
+export const markUserEmailAsVerifiedRepository = async (userId, emailVerifiedAt) => {
+  return await prisma.user.update({
+    where: { id: userId },
+    data: { emailVerifiedAt },
+  });
+};
