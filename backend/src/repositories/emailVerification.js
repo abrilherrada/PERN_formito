@@ -1,14 +1,15 @@
 import { prisma } from '../../prisma/client.js';
 
-export const createTokenRepository = async (userId, expiresAt, token) => {
+export const createTokenRepository = async ({ userId, userEmailId, expiresAt, token, type }) => {
   return await prisma.emailVerificationToken.create({
-    data: { userId, expiresAt, token },
+    data: { userId, userEmailId, expiresAt, token, type },
   });
 };
 
 export const findTokenByTokenRepository = async (token) => {
   return await prisma.emailVerificationToken.findUnique({
-    where: { token }
+    where: { token },
+    include: { user: true, userEmail: true }
   });
 };
 
@@ -28,6 +29,12 @@ export const deleteTokenRepository = async (id) => {
 export const deleteTokensByUserIdRepository = async (userId) => {
   return await prisma.emailVerificationToken.deleteMany({
     where: { userId }
+  });
+};
+
+export const deleteTokensByUserEmailIdRepository = async (userEmailId) => {
+  return await prisma.emailVerificationToken.deleteMany({
+    where: { userEmailId }
   });
 };
 
