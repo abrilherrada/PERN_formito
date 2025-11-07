@@ -59,7 +59,7 @@ model UserEmail {
 model EmailVerificationToken {
   id          String                        @id @default(cuid())
   token       String                        @unique @default(uuid())
-  type        EmailVerificationTokenType    @default(REGISTER)
+  type        EmailVerificationTokenType    @default(ACCOUNT_EMAIL)
   userId      String?
   user        User?                         @relation(fields: [userId], references: [id], onDelete: Cascade)
   userEmailId String?
@@ -75,7 +75,6 @@ enum Plan {
 }
 
 enum EmailVerificationTokenType {
-  REGISTER
-  USER_EMAIL
-  FORM_DESTINATION
+  ACCOUNT_EMAIL
+  SECONDARY_EMAIL
 }
