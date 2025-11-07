@@ -18,6 +18,7 @@ import {
   consumeTokenService,
 } from './emailVerification.js';
 import { sendVerificationEmail } from './email/sendVerificationEmail.js';
+import { EmailVerificationTokenType } from '@prisma/client';
 
 export const registerService = async (data) => {
   let verificationToken;
@@ -28,9 +29,12 @@ export const registerService = async (data) => {
 
     const user = await registerRepository({ ...data, password: hashedPassword });
 
-    verificationToken = await createTokenService(user.id);
+    verificationToken = await createTokenService({
+      userId: user.id,
+      type: EmailVerificationTokenType.ACCOUNT_EMAIL,
+    });
 
-    await sendVerificationEmail({ to: user.email, token: verificationToken.token });
+    await sendVerificationEmail({ to: user.email, token: verificationToken.token, type: EmailVerificationTokenType.ACCOUNT_EMAIL });
 
     return {
       userId: user.id,
@@ -97,9 +101,12 @@ export const resendVerificationService = async (email) => {
       throw new BadRequestError('Email already verified', { code: 'AUTH_EMAIL_ALREADY_VERIFIED' });
     }
 
-    verificationToken = await createTokenService(user.id);
+    verificationToken = await createTokenService({
+      userId: user.id,
+      type: EmailVerificationTokenType.ACCOUNT_EMAIL,
+    });
 
-    await sendVerificationEmail({ to: user.email, token: verificationToken.token });
+    await sendVerificationEmail({ to: user.email, token: verificationToken.token, type: EmailVerificationTokenType.ACCOUNT_EMAIL });
 
     return {
       userId: user.id,
