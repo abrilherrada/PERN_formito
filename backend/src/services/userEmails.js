@@ -73,7 +73,10 @@ export const verifyUserEmailService = async (tokenString) => {
     );
 
     if (verifiedUserEmail.isPrimary) {
-      await setPrimaryUserEmailService(verifiedUserEmail.id);
+      await setPrimaryUserEmailService({
+        userId: verifiedUserEmail.userId,
+        userEmailId: verifiedUserEmail.id
+      });
     }
 
     return {
@@ -86,13 +89,13 @@ export const verifyUserEmailService = async (tokenString) => {
   }
 };
 
-export const resendUserEmailVerificationService = async (userEmailId) => {
+export const resendUserEmailVerificationService = async ({ userId, userEmailId }) => {
   let verificationToken;
 
   try {
     const email = await findUserEmailByIdRepository(userEmailId);
 
-    if (!email) {
+    if (!email || email.userId !== userId) {
       throw new NotFoundError('User email not found', { code: 'USER_EMAIL_NOT_FOUND' });
     }
 
@@ -128,11 +131,11 @@ export const resendUserEmailVerificationService = async (userEmailId) => {
   }
 };
 
-export const setPrimaryUserEmailService = async (userEmailId) => {
+export const setPrimaryUserEmailService = async ({ userId, userEmailId }) => {
   try {
     const email = await findUserEmailByIdRepository(userEmailId);
 
-    if (!email) {
+    if (!email || email.userId !== userId) {
       throw new NotFoundError('User email not found', { code: 'USER_EMAIL_NOT_FOUND' });
     }
 
@@ -140,7 +143,7 @@ export const setPrimaryUserEmailService = async (userEmailId) => {
       throw new BadRequestError('Email not verified', { code: 'USER_EMAIL_NOT_VERIFIED' });
     }
 
-    const currentPrimaryEmail = await findPrimaryUserEmailRepository(email.userId);
+    const currentPrimaryEmail = await findPrimaryUserEmailRepository(userId);
 
     if (currentPrimaryEmail && currentPrimaryEmail.id !== email.id) {   
       await updateUserEmailRepository(currentPrimaryEmail.id, { isPrimary: false });
@@ -148,7 +151,7 @@ export const setPrimaryUserEmailService = async (userEmailId) => {
 
     await updateUserEmailRepository(email.id, { isPrimary: true });
 
-    await updateUserRepository(email.userId, { email: email.email });
+    await updateUserRepository(userId, { email: email.email });
 
     return {
       userEmailId: email.id,
@@ -159,11 +162,11 @@ export const setPrimaryUserEmailService = async (userEmailId) => {
   }
 };
 
-export const deleteUserEmailService = async (userEmailId) => {
+export const deleteUserEmailService = async ({ userId, userEmailId }) => {
   try {
     const email = await findUserEmailByIdRepository(userEmailId);
 
-    if (!email) {
+    if (!email || email.userId !== userId) {
       throw new NotFoundError('User email not found', { code: 'USER_EMAIL_NOT_FOUND' });
     }
 
