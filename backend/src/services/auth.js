@@ -3,13 +3,20 @@ import jwt from 'jsonwebtoken';
 import {
   registerRepository,
   loginRepository,
-  markUserEmailAsVerifiedRepository,
 } from '../repositories/auth.js';
+import {
+  createUserEmailRepository,
+  findUserEmailByEmailRepository,
+  updateUserEmailRepository,
+  findPrimaryUserEmailRepository,
+  findUserEmailsByUserIdRepository
+} from '../repositories/userEmail.js';
 import {
   InternalServerError,
   UnauthorizedError,
   BadRequestError,
   NotFoundError,
+  ConflictError
 } from '../utils/errors/httpErrors.js';
 import { handlePrismaError } from '../utils/errors/prismaErrors.js';
 import {
@@ -28,6 +35,22 @@ export const registerService = async (data) => {
     const hashedPassword = await bcrypt.hash(data.password, SALT_ROUNDS);
 
     const user = await registerRepository({ ...data, password: hashedPassword });
+
+    const existingUserEmail = await findUserEmailByEmailRepository(user.email);
+
+    if (existingUserEmail) {
+      if (existingUserEmail.userId !== user.id) {
+        throw new ConflictError('Email already associated with another account', {
+          code: 'EMAIL_ALREADY_ASSOCIATED',
+        });
+      }
+    } else {
+      await createUserEmailRepository({
+        userId: user.id,
+        email: user.email,
+        isPrimary: true,
+      });
+    }
 
     verificationToken = await createTokenService({
       userId: user.id,
@@ -67,7 +90,9 @@ export const loginService = async (data) => {
       throw new UnauthorizedError('Invalid credentials', { code: 'AUTH_INVALID_CREDENTIALS' });
     }
 
-    if (!user.emailVerifiedAt) {
+    const primaryEmail = await findPrimaryUserEmailRepository(user.id);
+
+    if (!primaryEmail || !primaryEmail.emailVerifiedAt) {
       throw new UnauthorizedError('Email not verified', { code: 'AUTH_EMAIL_NOT_VERIFIED' });
     }
 
@@ -97,7 +122,13 @@ export const resendVerificationService = async (email) => {
       throw new NotFoundError('User not found', { code: 'AUTH_USER_NOT_FOUND' });
     }
 
-    if (user.emailVerifiedAt) {
+    const primaryEmail = await findPrimaryUserEmailRepository(user.id);
+
+    if (!primaryEmail) {
+      throw new InternalServerError('Primary email record not found', { code: 'AUTH_PRIMARY_EMAIL_NOT_FOUND' });
+    }
+
+    if (primaryEmail.emailVerifiedAt) {
       throw new BadRequestError('Email already verified', { code: 'AUTH_EMAIL_ALREADY_VERIFIED' });
     }
 
@@ -130,14 +161,19 @@ export const verifyEmailService = async (tokenString) => {
     const token = await consumeTokenService(tokenString);
     const verifiedAt = new Date();
 
-    const verifiedUser = await markUserEmailAsVerifiedRepository(
-      token.userId,
-      verifiedAt,
-    );
+    const primaryEmail = await findPrimaryUserEmailRepository(token.userId);
 
+    if (!primaryEmail) {
+      throw new InternalServerError('Primary email record not found for user', { code: 'AUTH_PRIMARY_EMAIL_NOT_FOUND' });
+    }
+
+    const updatedPrimaryEmail = await updateUserEmailRepository(primaryEmail.id, {
+        emailVerifiedAt: verifiedAt,
+      });
+    
     return {
-      userId: verifiedUser.id,
-      emailVerifiedAt: verifiedUser.emailVerifiedAt,
+      userId: updatedPrimaryEmail.userId,
+      emailVerifiedAt: updatedPrimaryEmail.emailVerifiedAt,
       message: 'Email verified successfully.',
     };
   } catch (error) {

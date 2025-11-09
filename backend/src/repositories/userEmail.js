@@ -1,8 +1,13 @@
 import { prisma } from '../../prisma/client.js';
 
-export const createUserEmailRepository = async ({ userId, email, isPrimary }) => {
+export const createUserEmailRepository = async ({
+  userId,
+  email,
+  isPrimary,
+  emailVerifiedAt = null
+}) => {
   return await prisma.userEmail.create({
-    data: { userId, email, isPrimary }
+    data: { userId, email, isPrimary, emailVerifiedAt }
   });
 };
 
