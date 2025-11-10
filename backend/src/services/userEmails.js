@@ -1,4 +1,4 @@
-import { EmailVerificationTokenType } from '@prisma/client';
+import { VerificationTokenType } from '@prisma/client';
 import {
   createUserEmailRepository,
   findUserEmailByIdRepository,
@@ -9,12 +9,12 @@ import {
   deleteUserEmailRepository
 } from '../repositories/userEmail.js';
 import { updateUserRepository } from '../repositories/user.js';
-import { deleteTokensByUserEmailIdRepository } from '../repositories/emailVerification.js';
+import { deleteTokensByUserEmailIdRepository } from '../repositories/verificationToken.js';
 import {
   createTokenService,
   consumeTokenService,
   deleteTokenService
-} from './emailVerification.js';
+} from './verificationTokens.js';
 import { sendVerificationEmail } from './email/sendVerificationEmail.js';
 import {
   BadRequestError,
@@ -36,13 +36,14 @@ export const createUserEmailService = async ({ userId, email }) => {
 
     verificationToken = await createTokenService({
       userEmailId: newUserEmail.id,
-      type: EmailVerificationTokenType.SECONDARY_EMAIL
+      type: VerificationTokenType.SECONDARY_EMAIL
     });
 
     await sendVerificationEmail({
       to: email,
+      selector: verificationToken.selector,
       token: verificationToken.token,
-      type: EmailVerificationTokenType.SECONDARY_EMAIL
+      type: VerificationTokenType.SECONDARY_EMAIL
     });
 
     return {
@@ -61,9 +62,9 @@ export const createUserEmailService = async ({ userId, email }) => {
   }
 };
 
-export const verifyUserEmailService = async (tokenString) => {
+export const verifyUserEmailService = async (tokenSelector, token) => {
   try {
-    const token = await consumeTokenService(tokenString, EmailVerificationTokenType.SECONDARY_EMAIL);
+    const token = await consumeTokenService(tokenSelector, token, VerificationTokenType.SECONDARY_EMAIL);
 
     const verifiedAt = new Date();
 
@@ -105,13 +106,14 @@ export const resendUserEmailVerificationService = async ({ userId, userEmailId }
 
     verificationToken = await createTokenService({
       userEmailId: email.id,
-      type: EmailVerificationTokenType.SECONDARY_EMAIL
+      type: VerificationTokenType.SECONDARY_EMAIL
     });
 
     await sendVerificationEmail({
       to: email.email,
+      selector: verificationToken.selector,
       token: verificationToken.token,
-      type: EmailVerificationTokenType.SECONDARY_EMAIL
+      type: VerificationTokenType.SECONDARY_EMAIL
     });
 
     return {

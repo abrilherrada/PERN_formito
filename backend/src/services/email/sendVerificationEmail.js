@@ -1,14 +1,45 @@
 import { SendEmailCommand } from '@aws-sdk/client-ses';
 import { sesClient } from './sesClient.js';
 import { InternalServerError } from '../../utils/errors/httpErrors.js';
-import { EmailVerificationTokenType } from '@prisma/client';
+import { VerificationTokenType } from '@prisma/client';
 
 const APP_URL = process.env.APP_URL ?? 'http://localhost:5173';
 const EMAIL_FROM = process.env.AWS_SES_FROM_EMAIL;
 
-const messages = {
-  [EmailVerificationTokenType.ACCOUNT_EMAIL]: "Thank you for registering with Formito.",
-  [EmailVerificationTokenType.SECONDARY_EMAIL]: "Please verify your email address."
+const emailContent = {
+  [VerificationTokenType.ACCOUNT_EMAIL]: {
+    subject: 'Confirm your email address',
+    body: {
+      message: [
+        'Thank you for registering with Formito.',
+        'Click the link below to verify your email address:'
+      ],
+      linkPath: 'verify-email',
+      ignore: 'If you did not request this verification, please ignore this message.'
+    }
+  },
+  [VerificationTokenType.SECONDARY_EMAIL]: {
+    subject: 'Confirm your new email address',
+    body: {
+      message: [
+        'You\'ve added a new email address to your Formito account.',
+        'Click the link below to verify your new email address:'
+      ],
+      linkPath: 'verify-email',
+      ignore: 'If you did not request this verification, please ignore this message.'
+    }
+  },
+  [VerificationTokenType.PASSWORD_RESET]: {
+    subject: 'Reset your password',
+    body: {
+      message: [
+        'You\'ve requested a password reset for your Formito account.',
+        'Click the link below to reset your password:'
+      ],
+      linkPath: 'reset-password/confirm',
+      ignore: 'If you did not request this change, please ignore this message.'
+    }
+  }
 };
 
 if (!EMAIL_FROM) {
@@ -17,13 +48,22 @@ if (!EMAIL_FROM) {
 
 export const sendVerificationEmail = async ({
   to,
+  selector,
   token,
-  type = EmailVerificationTokenType.ACCOUNT_EMAIL
+  type = VerificationTokenType.ACCOUNT_EMAIL
 }) => {
   try {
-    const verificationUrl = `${APP_URL}/verify-email?token=${token}`;
+    const message = emailContent[type];
 
-    const message = messages[type] ?? messages[EmailVerificationTokenType.ACCOUNT_EMAIL];
+    if (!message) {
+      throw new InternalServerError(`Unsupported verification token type: ${type}`);
+    }
+
+    const bodyHtml = message.body.message
+      .map((line) => `<p>${line}</p>`)
+      .join('');
+
+    const verificationUrl = `${APP_URL}/${message.linkPath}?selector=${selector}&token=${token}`;
 
     const command = new SendEmailCommand({
       Source: EMAIL_FROM,
@@ -32,22 +72,21 @@ export const sendVerificationEmail = async ({
       },
       Message: {
         Subject: {
-          Data: 'Confirm your email address for Formito',
+          Data: message.subject,
         },
         Body: {
           Html: {
             Data: `
               <p>Hello!</p>
-              <p>${message}</p>
-              <p>Click the link below to verify your email address:</p>
+              ${bodyHtml}
               <p><a href="${verificationUrl}">${verificationUrl}</a></p>
-              <p>If you did not request this verification, please ignore this message.</p>
+              <p>${message.body.ignore}</p>
             `,
           },
         },
       },
     });
-  
+
     await sesClient.send(command);
   } catch (error) {
     console.error('SES error', error);

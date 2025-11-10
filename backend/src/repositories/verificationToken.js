@@ -40,15 +40,21 @@ export const deleteTokenRepository = async (id) => {
   });
 };
 
-export const deleteTokensByUserIdRepository = async (userId) => {
+export const deleteTokensByUserIdRepository = async (userId, type) => {
   return await prisma.verificationToken.deleteMany({
-    where: { userId }
+    where: {
+      userId,
+      ...(type ? { type } : {}),
+    }
   });
 };
 
-export const deleteTokensByUserEmailIdRepository = async (userEmailId) => {
+export const deleteTokensByUserEmailIdRepository = async (userEmailId, type) => {
   return await prisma.verificationToken.deleteMany({
-    where: { userEmailId }
+    where: {
+      userEmailId,
+      ...(type ? { type } : {}),
+    }
   });
 };
 

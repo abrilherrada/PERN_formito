@@ -8,8 +8,7 @@ import {
   createUserEmailRepository,
   findUserEmailByEmailRepository,
   updateUserEmailRepository,
-  findPrimaryUserEmailRepository,
-  findUserEmailsByUserIdRepository
+  findPrimaryUserEmailRepository
 } from '../repositories/userEmail.js';
 import {
   InternalServerError,
@@ -23,9 +22,9 @@ import {
   createTokenService,
   deleteTokenService,
   consumeTokenService,
-} from './emailVerification.js';
+} from './verificationTokens.js';
 import { sendVerificationEmail } from './email/sendVerificationEmail.js';
-import { EmailVerificationTokenType } from '@prisma/client';
+import { VerificationTokenType } from '@prisma/client';
 
 export const registerService = async (data) => {
   let verificationToken;
@@ -54,10 +53,15 @@ export const registerService = async (data) => {
 
     verificationToken = await createTokenService({
       userId: user.id,
-      type: EmailVerificationTokenType.ACCOUNT_EMAIL,
+      type: VerificationTokenType.ACCOUNT_EMAIL,
     });
 
-    await sendVerificationEmail({ to: user.email, token: verificationToken.token, type: EmailVerificationTokenType.ACCOUNT_EMAIL });
+    await sendVerificationEmail({
+      to: user.email,
+      selector: verificationToken.selector,
+      token: verificationToken.token,
+      type: VerificationTokenType.ACCOUNT_EMAIL
+    });
 
     return {
       userId: user.id,
@@ -134,10 +138,15 @@ export const resendVerificationService = async (email) => {
 
     verificationToken = await createTokenService({
       userId: user.id,
-      type: EmailVerificationTokenType.ACCOUNT_EMAIL,
+      type: VerificationTokenType.ACCOUNT_EMAIL,
     });
 
-    await sendVerificationEmail({ to: user.email, token: verificationToken.token, type: EmailVerificationTokenType.ACCOUNT_EMAIL });
+    await sendVerificationEmail({
+      to: user.email,
+      selector: verificationToken.selector,
+      token: verificationToken.token,
+      type: VerificationTokenType.ACCOUNT_EMAIL
+    });
 
     return {
       userId: user.id,
@@ -156,9 +165,9 @@ export const resendVerificationService = async (email) => {
   }
 };
 
-export const verifyEmailService = async (tokenString) => {
+export const verifyEmailService = async (tokenSelector, token) => {
   try {
-    const token = await consumeTokenService(tokenString);
+    const token = await consumeTokenService(tokenSelector, token, VerificationTokenType.ACCOUNT_EMAIL);
     const verifiedAt = new Date();
 
     const primaryEmail = await findPrimaryUserEmailRepository(token.userId);
