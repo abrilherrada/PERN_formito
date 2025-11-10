@@ -19,7 +19,7 @@ model User {
   createdAt          DateTime     @default(now())
   updatedAt          DateTime     @updatedAt
   forms              Form[]
-  emailVerificationTokens EmailVerificationToken[]
+  verificationTokens VerificationToken[]
   userEmails         UserEmail[]
 }
 
@@ -52,20 +52,21 @@ model UserEmail {
   emailVerifiedAt DateTime?
   createdAt       DateTime                  @default(now())
   updatedAt       DateTime                  @updatedAt
-  verificationTokens EmailVerificationToken[]
+  verificationTokens VerificationToken[]
 }
 
-model EmailVerificationToken {
-  id          String                        @id @default(cuid())
-  token       String                        @unique @default(uuid())
-  type        EmailVerificationTokenType    @default(ACCOUNT_EMAIL)
-  userId      String?
-  user        User?                         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userEmailId String?
-  userEmail   UserEmail?                    @relation(fields: [userEmailId], references: [id], onDelete: Cascade)
-  expiresAt   DateTime
-  usedAt      DateTime?
-  createdAt   DateTime                      @default(now())
+model VerificationToken {
+  id            String                        @id @default(cuid())
+  tokenSelector String                        @unique
+  tokenHash     String
+  type          VerificationTokenType         @default(ACCOUNT_EMAIL)
+  userId        String?
+  user          User?                         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userEmailId   String?
+  userEmail     UserEmail?                    @relation(fields: [userEmailId], references: [id], onDelete: Cascade)
+  expiresAt     DateTime
+  usedAt        DateTime?
+  createdAt     DateTime                      @default(now())
 }
 
 enum Plan {
@@ -73,7 +74,8 @@ enum Plan {
   PREMIUM
 }
 
-enum EmailVerificationTokenType {
+enum VerificationTokenType {
   ACCOUNT_EMAIL
   SECONDARY_EMAIL
+  PASSWORD_RESET
 }
