@@ -9,6 +9,7 @@ export const resendUserEmailSchema = z.object({
 });
 
 export const verifyUserEmailSchema = z.object({
+  selector: z.string().uuid('Invalid verification token selector'),
   token: z.string().uuid('Invalid verification token'),
 });
 

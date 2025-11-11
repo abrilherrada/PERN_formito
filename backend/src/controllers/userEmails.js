@@ -19,8 +19,8 @@ export const createUserEmail = async (req, res, next) => {
 
 export const verifyUserEmail = async (req, res, next) => {
   try {
-    const { token } = req.validatedData.body;
-    const result = await verifyUserEmailService(token);
+    const { selector, token } = req.validatedData.body;
+    const result = await verifyUserEmailService(selector, token);
     res.status(200).json(result);
   } catch (error) {
     next(error);
