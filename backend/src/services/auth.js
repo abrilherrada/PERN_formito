@@ -10,6 +10,7 @@ import {
   updateUserEmailRepository,
   findPrimaryUserEmailRepository
 } from '../repositories/userEmail.js';
+import { updateUserRepository } from '../repositories/user.js';
 import {
   InternalServerError,
   UnauthorizedError,
@@ -22,6 +23,7 @@ import {
   createTokenService,
   deleteTokenService,
   consumeTokenService,
+  deleteTokensByUserIdService
 } from './verificationTokens.js';
 import { sendVerificationEmail } from './email/sendVerificationEmail.js';
 import { VerificationTokenType } from '@prisma/client';
@@ -165,9 +167,9 @@ export const resendVerificationService = async (email) => {
   }
 };
 
-export const verifyEmailService = async (tokenSelector, token) => {
+export const verifyEmailService = async (tokenSelector, tokenValue) => {
   try {
-    const token = await consumeTokenService(tokenSelector, token, VerificationTokenType.ACCOUNT_EMAIL);
+    const token = await consumeTokenService(tokenSelector, tokenValue, VerificationTokenType.ACCOUNT_EMAIL);
     const verifiedAt = new Date();
 
     const primaryEmail = await findPrimaryUserEmailRepository(token.userId);
@@ -184,6 +186,66 @@ export const verifyEmailService = async (tokenSelector, token) => {
       userId: updatedPrimaryEmail.userId,
       emailVerifiedAt: updatedPrimaryEmail.emailVerifiedAt,
       message: 'Email verified successfully.',
+    };
+  } catch (error) {
+    throw handlePrismaError(error);
+  }
+};
+
+export const requestPasswordResetService = async (email) => {
+  try {
+    const user = await loginRepository({ email });
+
+    if (!user) {
+      return {
+        message: 'If that email exists in our system, we have sent a link to reset the password.',
+      };
+    }
+
+    const primaryEmail = await findPrimaryUserEmailRepository(user.id);
+
+    if (!primaryEmail || !primaryEmail.emailVerifiedAt) {
+      return {
+        message: 'If that email exists in our system, we have sent a link to reset the password.',
+      };
+    }
+
+    const resetToken = await createTokenService({
+      userId: user.id,
+      type: VerificationTokenType.PASSWORD_RESET,
+    });
+
+    await sendVerificationEmail({
+      to: primaryEmail.email,
+      selector: resetToken.selector,
+      token: resetToken.token,
+      type: VerificationTokenType.PASSWORD_RESET
+    });
+
+    return {
+      message: 'If that email exists in our system, we have sent a link to reset the password.'
+    };
+  } catch (error) {
+    throw handlePrismaError(error);
+  }
+};
+
+export const resetPasswordService = async (selector, tokenValue, newPassword) => {
+  try {
+    const token = await consumeTokenService(selector, tokenValue, VerificationTokenType.PASSWORD_RESET);
+
+    const SALT_ROUNDS = parseInt(process.env.BCRYPT_SALT_ROUNDS, 10) || 12;
+    const hashedPassword = await bcrypt.hash(newPassword, SALT_ROUNDS);
+
+    await updateUserRepository(token.userId, {
+      password: hashedPassword,
+    });
+
+    await deleteTokensByUserIdService(token.userId, VerificationTokenType.PASSWORD_RESET);
+
+    return {
+      userId: token.userId,
+      message: 'Password reset successfully.',
     };
   } catch (error) {
     throw handlePrismaError(error);

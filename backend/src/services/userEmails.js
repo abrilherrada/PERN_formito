@@ -62,9 +62,9 @@ export const createUserEmailService = async ({ userId, email }) => {
   }
 };
 
-export const verifyUserEmailService = async (tokenSelector, token) => {
+export const verifyUserEmailService = async (tokenSelector, tokenValue) => {
   try {
-    const token = await consumeTokenService(tokenSelector, token, VerificationTokenType.SECONDARY_EMAIL);
+    const token = await consumeTokenService(tokenSelector, tokenValue, VerificationTokenType.SECONDARY_EMAIL);
 
     const verifiedAt = new Date();
 
