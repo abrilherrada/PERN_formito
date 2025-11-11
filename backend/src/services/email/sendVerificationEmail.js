@@ -63,7 +63,7 @@ export const sendVerificationEmail = async ({
       .map((line) => `<p>${line}</p>`)
       .join('');
 
-    const verificationUrl = `${APP_URL}/${message.linkPath}?selector=${selector}&token=${token}`;
+    const verificationUrl = `${APP_URL}/${message.body.linkPath}?selector=${selector}&token=${token}`;
 
     const command = new SendEmailCommand({
       Source: EMAIL_FROM,
