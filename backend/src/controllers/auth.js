@@ -2,7 +2,9 @@ import {
   registerService,
   loginService,
   resendVerificationService,
-  verifyEmailService
+  verifyEmailService,
+  requestPasswordResetService,
+  resetPasswordService
 } from '../services/auth.js';
 
 export const registerUser = async (req, res, next) => {
@@ -42,11 +44,31 @@ export const resendVerificationEmail = async (req, res, next) => {
 
 export const verifyEmail = async (req, res, next) => {
   try {
-    const { token } = req.validatedData.query;
-    const result = await verifyEmailService(token);
+    const { selector, token } = req.validatedData.query;
+    const result = await verifyEmailService(selector, token);
     res
       .status(200)
       .json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const requestPasswordReset = async (req, res, next) => {
+  try {
+    const { email } = req.validatedData.body;
+    const result = await requestPasswordResetService(email);
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const confirmPasswordReset = async (req, res, next) => {
+  try {
+    const { selector, token, newPassword } = req.validatedData.body;
+    const result = await resetPasswordService(selector, token, newPassword);
+    res.status(200).json(result);
   } catch (error) {
     next(error);
   }
