@@ -29,7 +29,6 @@ model Form {
   userId           String
   user             User         @relation(fields: [userId], references: [id])
   destinationEmail String
-  token            String       @unique @default(uuid())
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
   submissions      Submission[]
