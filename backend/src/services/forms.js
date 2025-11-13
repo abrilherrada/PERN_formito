@@ -10,8 +10,7 @@ import {
 } from '../repositories/userEmail.js';
 import {
   NotFoundError,
-  BadRequestError,
-  UnauthorizedError
+  BadRequestError
 } from '../utils/errors/httpErrors.js';
 import { handlePrismaError } from '../utils/errors/prismaErrors.js';
 
@@ -46,7 +45,7 @@ export const findFormByIdService = async (id, userId) => {
     }
 
     if (form.userId !== userId) {
-      throw new UnauthorizedError('Form does not belong to this user', { code: 'FORM_ACCESS_DENIED' });
+      throw new NotFoundError('Form not found', { code: 'FORM_NOT_FOUND' });
     }
 
     return form;
