@@ -3,6 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import authRouter from './routes/auth.js';
 import userEmailsRouter from './routes/userEmails.js';
+import formsRouter from './routes/forms.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
 dotenv.config();
@@ -19,6 +20,7 @@ app.get('/', (req, res) => {
 
 app.use('/api/auth', authRouter);
 app.use('/api/user/emails', userEmailsRouter);
+app.use('/api/forms', formsRouter);
 
 app.use(errorHandler);
 
