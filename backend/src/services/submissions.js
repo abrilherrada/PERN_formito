@@ -3,9 +3,8 @@ import {
   findSubmissionsByFormIdRepository,
   findSubmissionByIdRepository
 } from '../repositories/submission.js';
-import { updateUserRepository } from '../repositories/user.js';
-import { findPrimaryUserEmailRepository } from '../repositories/userEmail.js';
-import { loginRepository } from '../repositories/auth.js';
+import { updateUserRepository, findUserByIdRepository } from '../repositories/user.js';
+import { findFormByIdRepository } from '../repositories/form.js';
 import { findFormByIdService } from './forms.js';
 import { sendSubmissionEmail } from './email/sendSubmissionEmail.js';
 import {
@@ -15,21 +14,15 @@ import {
 } from '../utils/errors/httpErrors.js';
 import { handlePrismaError } from '../utils/errors/prismaErrors.js';
 
-export const createSubmissionService = async ({formId, userId, data}) => {
+export const createSubmissionService = async ({formId, data}) => {
   try {
-    const form = await findFormByIdService(formId, userId);
+    const form = await findFormByIdRepository(formId);
 
-    const primaryEmail = await findPrimaryUserEmailRepository(userId);
-
-    if (!primaryEmail) {
-      throw new NotFoundError('Primary email not found', { code: 'PRIMARY_EMAIL_NOT_FOUND' });
+    if (!form) {
+      throw new NotFoundError('Form not found', { code: 'FORM_NOT_FOUND' });
     }
 
-    if (!primaryEmail.emailVerifiedAt) {
-      throw new UnauthorizedError('Primary email not verified', { code: 'PRIMARY_EMAIL_NOT_VERIFIED' });
-    }
-
-    const user = await loginRepository({ email: primaryEmail.email });
+    const user = await findUserByIdRepository(form.userId);
 
     if (!user) {
       throw new NotFoundError('User not found', { code: 'USER_NOT_FOUND' });
@@ -70,7 +63,7 @@ export const findSubmissionsByFormIdService = async (formId, userId) => {
   }
 };
 
-export const findSubmissionByIdService = async (id, userId) => {
+export const findSubmissionByIdService = async (id, userId, formId) => {
   try {
     const submission = await findSubmissionByIdRepository(id);
 
@@ -79,6 +72,10 @@ export const findSubmissionByIdService = async (id, userId) => {
     }
 
     if (submission.form.userId !== userId) {
+      throw new NotFoundError('Submission not found', { code: 'SUBMISSION_NOT_FOUND' });
+    }
+
+    if (submission.form.id !== formId) {
       throw new NotFoundError('Submission not found', { code: 'SUBMISSION_NOT_FOUND' });
     }
 
