@@ -9,8 +9,7 @@ import { findFormByIdService } from './forms.js';
 import { sendSubmissionEmail } from './email/sendSubmissionEmail.js';
 import {
   BadRequestError,
-  NotFoundError,
-  UnauthorizedError,
+  NotFoundError
 } from '../utils/errors/httpErrors.js';
 import { handlePrismaError } from '../utils/errors/prismaErrors.js';
 
