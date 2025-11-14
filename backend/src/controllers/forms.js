@@ -18,8 +18,8 @@ export const createForm = async (req, res, next) => {
 
 export const findFormById = async (req, res, next) => {
   try {
-    const { id } = req.validatedData.params;
-    const result = await findFormByIdService(id, req.user.id);
+    const { formId } = req.validatedData.params;
+    const result = await findFormByIdService(formId, req.user.id);
     res.status(200).json(result);
   } catch (error) {
     next(error);
@@ -37,9 +37,9 @@ export const findFormsByUserId = async (req, res, next) => {
 
 export const updateForm = async (req, res, next) => {
   try {
-    const { id } = req.validatedData.params;
+    const { formId } = req.validatedData.params;
     const { name, destinationEmail } = req.validatedData.body;
-    const result = await updateFormService(id, { name, destinationEmail }, req.user.id);
+    const result = await updateFormService(formId, { name, destinationEmail }, req.user.id);
     res.status(200).json(result);
   } catch (error) {
     next(error);
@@ -48,8 +48,8 @@ export const updateForm = async (req, res, next) => {
 
 export const deleteForm = async (req, res, next) => {
   try {
-    const { id } = req.validatedData.params;
-    await deleteFormService(id, req.user.id);
+    const { formId } = req.validatedData.params;
+    await deleteFormService(formId, req.user.id);
     res.status(204).send();
   } catch (error) {
     next(error);
