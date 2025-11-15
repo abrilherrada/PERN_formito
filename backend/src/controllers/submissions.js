@@ -7,7 +7,8 @@ import {
 export const createSubmission = async (req, res, next) => {
   try {
     const { formId } = req.validatedData.params;
-    const result = await createSubmissionService({ formId, data: req.validatedData.body });
+    const { data } = req.validatedData.body;
+    const result = await createSubmissionService({ formId, data });
     res.status(201).json(result);
   } catch (error) {
     next(error);

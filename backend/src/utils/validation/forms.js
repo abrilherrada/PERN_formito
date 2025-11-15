@@ -8,5 +8,5 @@ export const createFormSchema = z.object({
 export const updateFormSchema = createFormSchema.partial();
 
 export const formIdSchema = z.object({
-  id: z.string().cuid('Invalid form ID'),
+  formId: z.string().cuid('Invalid form ID'),
 });
