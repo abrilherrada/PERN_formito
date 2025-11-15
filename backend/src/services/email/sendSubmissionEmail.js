@@ -46,10 +46,35 @@ const renderDataHtml = (value) => {
   return escapeHtml(value);
 };
 
+const renderDataText = (value, indent = 0) => {
+  const prefix = '  '.repeat(indent);
+
+  if (value === null) return `${prefix}null`;
+
+  if (typeof value === 'object') {
+    if (Array.isArray(value)) {
+      if (value.length === 0) return `${prefix}[]`;
+      return value.map((item, index) =>
+        `${prefix}- ${renderDataText(item, indent + 1)}`
+      ).join('\n');
+    }
+
+    const entries = Object.entries(value);
+    if (entries.length === 0) return `${prefix}{}`;
+
+    return entries.map(
+      ([key, val]) => `${prefix}${key}:\n${renderDataText(val, indent + 1)}`
+    ).join('\n');
+  }
+
+  return `${prefix}${String(value)}`;
+};
+
 export const sendSubmissionEmail = async ({ to, formName, formId, data }) => {
   try {
     const formUrl = `${APP_URL}/forms/${formId}`;
     const dataHtml = renderDataHtml(data);
+    const dataText = renderDataText(data);
 
     const command = new SendEmailCommand({
       Source: EMAIL_FROM,
@@ -68,6 +93,16 @@ export const sendSubmissionEmail = async ({ to, formName, formId, data }) => {
               ${dataHtml}
               <p>View the form <a href="${escapeHtml(formUrl)}">here</a>.</p>
             `,
+          },
+          Text: {
+            Data: [
+              `Hello!`,
+              ``,
+              `There is a new submission for the form ${formName}:`,
+              dataText,
+              ``,
+              `View the form here: ${formUrl}.`,
+            ].join('\n'),
           },
         },
       },

@@ -63,6 +63,8 @@ export const sendVerificationEmail = async ({
       .map((line) => `<p>${line}</p>`)
       .join('');
 
+    const bodyText = message.body.message.join('\n');
+
     const verificationUrl = `${APP_URL}/${message.body.linkPath}?selector=${selector}&token=${token}`;
 
     const command = new SendEmailCommand({
@@ -82,6 +84,17 @@ export const sendVerificationEmail = async ({
               <p><a href="${verificationUrl}">${verificationUrl}</a></p>
               <p>${message.body.ignore}</p>
             `,
+          },
+          Text: {
+            Data: [
+              `Hello!`,
+              ``,
+              bodyText,
+              ``,
+              verificationUrl,
+              ``,
+              message.body.ignore,
+            ].join('\n'),
           },
         },
       },
