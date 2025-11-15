@@ -1,4 +1,6 @@
 import express from 'express';
+import multer from 'multer';
+import { normalizeSubmission } from '../middleware/normalizeSubmission.js';
 import { verifyToken } from '../middleware/verifyToken.js';
 import { validateRequest } from '../middleware/validateRequest.js';
 import {
@@ -25,9 +27,10 @@ import {
 } from '../controllers/submissions.js';
 
 const router = express.Router();
+const parseMultipart = multer().none();
 
 // Public
-router.post('/:formId', validateRequest(submissionParamsSchema, 'params'), validateRequest(submissionBodySchema), createSubmission);
+router.post('/:formId', parseMultipart, normalizeSubmission, validateRequest(submissionParamsSchema, 'params'), validateRequest(submissionBodySchema), createSubmission);
 
 // Private
 router.use(verifyToken);
