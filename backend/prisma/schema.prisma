@@ -13,11 +13,14 @@ model User {
   name               String
   email              String       @unique
   password           String
+  role               UserRole     @default(USER)
+  status             EntityStatus @default(ACTIVE)
   plan               Plan         @default(FREE)
   maxSubmissions     Int          @default(50)
   currentSubmissions Int          @default(0)
   createdAt          DateTime     @default(now())
   updatedAt          DateTime     @updatedAt
+  deletedAt          DateTime?
   forms              Form[]
   verificationTokens VerificationToken[]
   userEmails         UserEmail[]
@@ -29,8 +32,10 @@ model Form {
   userId           String
   user             User         @relation(fields: [userId], references: [id])
   destinationEmail String
+  status           EntityStatus @default(ACTIVE)
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
+  deletedAt        DateTime?
   submissions      Submission[]
 }
 
@@ -40,6 +45,7 @@ model Submission {
   form      Form     @relation(fields: [formId], references: [id])
   data      Json
   createdAt DateTime @default(now())
+  deletedAt DateTime?
 }
 
 model UserEmail {
@@ -77,4 +83,15 @@ enum VerificationTokenType {
   ACCOUNT_EMAIL
   SECONDARY_EMAIL
   PASSWORD_RESET
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum EntityStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
 }
