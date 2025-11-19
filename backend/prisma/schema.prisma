@@ -44,6 +44,7 @@ model Submission {
   formId    String
   form      Form     @relation(fields: [formId], references: [id])
   data      Json
+  status    EntityStatus @default(ACTIVE)
   createdAt DateTime @default(now())
   deletedAt DateTime?
 }
