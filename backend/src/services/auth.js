@@ -10,7 +10,10 @@ import {
   updateUserEmailRepository,
   findPrimaryUserEmailRepository
 } from '../repositories/userEmail.js';
-import { updateUserRepository } from '../repositories/user.js';
+import {
+  updateUserRepository,
+  findUserByEmailRepository
+} from '../repositories/user.js';
 import {
   InternalServerError,
   UnauthorizedError,
@@ -27,6 +30,7 @@ import {
 } from './verificationTokens.js';
 import { sendVerificationEmail } from './email/sendVerificationEmail.js';
 import { VerificationTokenType } from '@prisma/client';
+import { EntityStatus } from '@prisma/client';
 
 export const registerService = async (data) => {
   let verificationToken;
@@ -82,21 +86,29 @@ export const registerService = async (data) => {
   }
 };
 
-export const loginService = async (data) => {
+export const loginService = async ({ email, password }) => {
   try {
-    const user = await loginRepository({ email: data.email });
+    const account = await loginRepository(email, { includeDeleted: true });
 
-    if (!user) {
+    if (!account) {
       throw new UnauthorizedError('Invalid credentials', { code: 'AUTH_INVALID_CREDENTIALS' });
     }
 
-    const isValid = await bcrypt.compare(data.password, user.password);
+    if (account.status === EntityStatus.DELETED) {
+      throw new UnauthorizedError('Account deleted', { code: 'AUTH_ACCOUNT_DELETED' });
+    }
+
+    if (account.status === EntityStatus.SUSPENDED) {
+      throw new UnauthorizedError('Account suspended', { code: 'AUTH_ACCOUNT_SUSPENDED' });
+    }
+
+    const isValid = await bcrypt.compare(password, account.password);
 
     if (!isValid) {
       throw new UnauthorizedError('Invalid credentials', { code: 'AUTH_INVALID_CREDENTIALS' });
     }
 
-    const primaryEmail = await findPrimaryUserEmailRepository(user.id);
+    const primaryEmail = account.userEmails?.[0];
 
     if (!primaryEmail || !primaryEmail.emailVerifiedAt) {
       throw new UnauthorizedError('Email not verified', { code: 'AUTH_EMAIL_NOT_VERIFIED' });
@@ -106,13 +118,12 @@ export const loginService = async (data) => {
       throw new InternalServerError('JWT_SECRET is not defined');
     }
 
-    const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, {
+    const tokenPayload = { id: account.id, role: account.role, status: account.status };
+    const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, {
       expiresIn: process.env.JWT_EXPIRES_IN || '1d',
     });
 
-    const { password: _password, ...safeUser } = user;
-
-    return { token, user: safeUser };
+    return { token, user: sanitizeUser(account) };
   } catch (error) {
     throw handlePrismaError(error);
   }
@@ -122,13 +133,17 @@ export const resendVerificationService = async (email) => {
   let verificationToken;
 
   try {
-    const user = await loginRepository({ email });
+    const account = await findUserByEmailRepository(email, { includeDeleted: true });
 
-    if (!user) {
+    if (!account || account.status === EntityStatus.DELETED) {
       throw new NotFoundError('User not found', { code: 'AUTH_USER_NOT_FOUND' });
     }
 
-    const primaryEmail = await findPrimaryUserEmailRepository(user.id);
+    if (account.status === EntityStatus.SUSPENDED) {
+      throw new BadRequestError('Account suspended', { code: 'AUTH_ACCOUNT_SUSPENDED' });
+    }
+
+    const primaryEmail = await findPrimaryUserEmailRepository(account.id);
 
     if (!primaryEmail) {
       throw new InternalServerError('Primary email record not found', { code: 'AUTH_PRIMARY_EMAIL_NOT_FOUND' });
@@ -139,19 +154,19 @@ export const resendVerificationService = async (email) => {
     }
 
     verificationToken = await createTokenService({
-      userId: user.id,
+      userId: account.id,
       type: VerificationTokenType.ACCOUNT_EMAIL,
     });
 
     await sendVerificationEmail({
-      to: user.email,
+      to: account.email,
       selector: verificationToken.selector,
       token: verificationToken.token,
       type: VerificationTokenType.ACCOUNT_EMAIL
     });
 
     return {
-      userId: user.id,
+      userId: account.id,
       message: 'Verification email resent successfully.',
     };
   } catch (error) {
@@ -194,15 +209,23 @@ export const verifyEmailService = async (tokenSelector, tokenValue) => {
 
 export const requestPasswordResetService = async (email) => {
   try {
-    const user = await loginRepository({ email });
+    const account = await findUserByEmailRepository(email, { includeDeleted: true });
 
-    if (!user) {
+    if (!account) {
       return {
         message: 'If that email exists in our system, we have sent a link to reset the password.',
       };
     }
 
-    const primaryEmail = await findPrimaryUserEmailRepository(user.id);
+    if (account.status === EntityStatus.DELETED) {
+      throw new NotFoundError('User not found', { code: 'AUTH_USER_NOT_FOUND' });
+    }
+
+    if (account.status === EntityStatus.SUSPENDED) {
+      throw new BadRequestError('Account suspended', { code: 'AUTH_ACCOUNT_SUSPENDED' });
+    }
+
+    const primaryEmail = await findPrimaryUserEmailRepository(account.id);
 
     if (!primaryEmail || !primaryEmail.emailVerifiedAt) {
       return {
@@ -211,7 +234,7 @@ export const requestPasswordResetService = async (email) => {
     }
 
     const resetToken = await createTokenService({
-      userId: user.id,
+      userId: account.id,
       type: VerificationTokenType.PASSWORD_RESET,
     });
 

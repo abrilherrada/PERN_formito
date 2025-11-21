@@ -5,12 +5,12 @@ export const registerRepository = async (data) => {
   return await prisma.user.create({ data });
 };
 
-export const loginRepository = async (data) => {
+export const loginRepository = async (email, { includeDeleted = false } = {}) => {
   return await prisma.user.findFirst({
     where: {
-      email: data.email,
-      status: EntityStatus.ACTIVE,
-      deletedAt: null
+      email,
+      status: includeDeleted ? undefined : EntityStatus.ACTIVE,
+      deletedAt: includeDeleted ? undefined : null
     },
     include: {
       userEmails: {

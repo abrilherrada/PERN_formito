@@ -3,7 +3,10 @@ import {
   findFormByIdRepository,
   findFormsByUserIdRepository,
   updateFormRepository,
-  deleteFormRepository
+  softDeleteFormRepository,
+  restoreFormRepository,
+  suspendFormRepository,
+  findFormByIdIncludingDeletedRepository
 } from '../repositories/form.js';
 import {
   findUserEmailByEmailRepository
@@ -13,6 +16,7 @@ import {
   BadRequestError
 } from '../utils/errors/httpErrors.js';
 import { handlePrismaError } from '../utils/errors/prismaErrors.js';
+import { EntityStatus } from '@prisma/client';
 
 export const createFormService = async ({name, userId, destinationEmail}) => {
   try {
@@ -102,7 +106,47 @@ export const deleteFormService = async (id, userId) => {
   try {
     await findFormByIdService(id, userId);
 
-    return await deleteFormRepository(id);
+    return await softDeleteFormRepository(id);
+  } catch (error) {
+    throw handlePrismaError(error);
+  }
+};
+
+export const restoreFormService = async (id) => {
+  try {
+    const form = await findFormByIdIncludingDeletedRepository(id);
+
+    if (!form) {
+      throw new NotFoundError('Form not found', { code: 'FORM_NOT_FOUND' });
+    }
+
+    if (form.status === EntityStatus.ACTIVE) {
+      throw new BadRequestError('Form is already active', { code: 'FORM_ALREADY_ACTIVE' });
+    }
+
+    return await restoreFormRepository(id);
+  } catch (error) {
+    throw handlePrismaError(error);
+  }
+};
+
+export const suspendFormService = async (id) => {
+  try {
+    const form = await findFormByIdIncludingDeletedRepository(id);
+
+    if (!form) {
+      throw new NotFoundError('Form not found', { code: 'FORM_NOT_FOUND' });
+    }
+
+    if (form.status === EntityStatus.DELETED) {
+      throw new BadRequestError('Cannot suspend a deleted form', { code: 'FORM_DELETED' });
+    }
+
+    if (form.status === EntityStatus.SUSPENDED) {
+      throw new BadRequestError('Form is already suspended', { code: 'FORM_ALREADY_SUSPENDED' });
+    }
+
+    return await suspendFormRepository(id);
   } catch (error) {
     throw handlePrismaError(error);
   }

@@ -1,10 +1,12 @@
 import {
   createSubmissionRepository,
   findSubmissionsByFormIdRepository,
-  findSubmissionByIdRepository
+  findSubmissionByIdRepository,
+  softDeleteSubmissionRepository,
+  restoreSubmissionRepository
 } from '../repositories/submission.js';
 import { updateUserRepository, findUserByIdRepository } from '../repositories/user.js';
-import { findFormByIdRepository } from '../repositories/form.js';
+import { findFormByIdIncludingDeletedRepository } from '../repositories/form.js';
 import { findFormByIdService } from './forms.js';
 import { sendSubmissionEmail } from './email/sendSubmissionEmail.js';
 import {
@@ -12,22 +14,31 @@ import {
   NotFoundError
 } from '../utils/errors/httpErrors.js';
 import { handlePrismaError } from '../utils/errors/prismaErrors.js';
+import { EntityStatus } from '@prisma/client';
 
 export const createSubmissionService = async ({formId, data}) => {
   try {
-    const form = await findFormByIdRepository(formId);
+    const form = await findFormByIdIncludingDeletedRepository(formId);
 
-    if (!form) {
+    if (!form || form.status === EntityStatus.DELETED) {
       throw new NotFoundError('Form not found', { code: 'FORM_NOT_FOUND' });
     }
 
-    const user = await findUserByIdRepository(form.userId);
+    if (form.status === EntityStatus.SUSPENDED) {
+      throw new BadRequestError('Form is suspended', { code: 'FORM_SUSPENDED' });
+    }
 
-    if (!user) {
+    const account = await findUserByIdRepository(form.userId, { includeDeleted: true });
+
+    if (!account || account.status === EntityStatus.DELETED) {
       throw new NotFoundError('User not found', { code: 'USER_NOT_FOUND' });
     }
 
-    if (user.currentSubmissions >= user.maxSubmissions) {
+    if (account.status === EntityStatus.SUSPENDED) {
+      throw new BadRequestError('User account suspended', { code: 'USER_ACCOUNT_SUSPENDED' });
+    }
+
+    if (account.currentSubmissions >= account.maxSubmissions) {
       throw new BadRequestError('Max submissions reached', { code: 'FORM_MAX_SUBMISSIONS_REACHED' });
     }
 
@@ -38,8 +49,8 @@ export const createSubmissionService = async ({formId, data}) => {
       data
     });
 
-    await updateUserRepository(user.id, {
-      currentSubmissions: user.currentSubmissions + 1,
+    await updateUserRepository(account.id, {
+      currentSubmissions: account.currentSubmissions + 1,
     });
 
     return await createSubmissionRepository({ formId, data });
@@ -66,19 +77,47 @@ export const findSubmissionByIdService = async (id, userId, formId) => {
   try {
     const submission = await findSubmissionByIdRepository(id);
 
-    if (!submission) {
-      throw new NotFoundError('Submission not found', { code: 'SUBMISSION_NOT_FOUND' });
-    }
-
-    if (submission.form.userId !== userId) {
-      throw new NotFoundError('Submission not found', { code: 'SUBMISSION_NOT_FOUND' });
-    }
-
-    if (submission.form.id !== formId) {
+    if (!submission || submission.form.userId !== userId || submission.form.id !== formId) {
       throw new NotFoundError('Submission not found', { code: 'SUBMISSION_NOT_FOUND' });
     }
 
     return submission;
+  } catch (error) {
+    throw handlePrismaError(error);
+  }
+};
+
+export const softDeleteSubmissionService = async ({ id, userId }) => {
+  try {
+    const submission = await findSubmissionByIdRepository(id, { includeDeleted: true });
+
+    if (!submission || submission.form.userId !== userId) {
+      throw new NotFoundError('Submission not found', { code: 'SUBMISSION_NOT_FOUND' });
+    }
+
+    if (submission.status === EntityStatus.DELETED) {
+      throw new BadRequestError('Submission is already deleted', { code: 'SUBMISSION_ALREADY_DELETED' });
+    }
+
+    return await softDeleteSubmissionRepository(id);
+  } catch (error) {
+    throw handlePrismaError(error);
+  }
+};
+
+export const restoreSubmissionService = async ({ id, userId }) => {
+  try {
+    const submission = await findSubmissionByIdRepository(id, { includeDeleted: true });
+
+    if (!submission || submission.form.userId !== userId) {
+      throw new NotFoundError('Submission not found', { code: 'SUBMISSION_NOT_FOUND' });
+    }
+
+    if (submission.status === EntityStatus.ACTIVE) {
+      throw new BadRequestError('Submission is already active', { code: 'SUBMISSION_ALREADY_ACTIVE' });
+    }
+
+    return await restoreSubmissionRepository(id);
   } catch (error) {
     throw handlePrismaError(error);
   }
