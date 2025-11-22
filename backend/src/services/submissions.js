@@ -87,7 +87,7 @@ export const findSubmissionByIdService = async (id, userId, formId) => {
   }
 };
 
-export const softDeleteSubmissionService = async ({ id, userId }) => {
+export const deleteSubmissionService = async ({ id, userId }) => {
   try {
     const submission = await findSubmissionByIdRepository(id, { includeDeleted: true });
 

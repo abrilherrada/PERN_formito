@@ -4,6 +4,8 @@ import {
   findFormsByUserIdService,
   updateFormService,
   deleteFormService,
+  restoreFormService,
+  suspendFormService
 } from '../services/forms.js';
 
 export const createForm = async (req, res, next) => {
@@ -51,6 +53,26 @@ export const deleteForm = async (req, res, next) => {
     const { formId } = req.validatedData.params;
     await deleteFormService(formId, req.user.id);
     res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const suspendForm = async (req, res, next) => {
+  try {
+    const { formId } = req.validatedData.params;
+    const result = await suspendFormService(formId);
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const restoreForm = async (req, res, next) => {
+  try {
+    const { formId } = req.validatedData.params;
+    const result = await restoreFormService(formId);
+    res.status(200).json(result);
   } catch (error) {
     next(error);
   }
