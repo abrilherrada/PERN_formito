@@ -31,6 +31,7 @@ import {
 import { sendVerificationEmail } from './email/sendVerificationEmail.js';
 import { VerificationTokenType } from '@prisma/client';
 import { EntityStatus } from '@prisma/client';
+import { sanitizeUser } from '../utils/sanitizeUser.js';
 
 export const registerService = async (data) => {
   let verificationToken;
