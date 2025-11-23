@@ -1,4 +1,9 @@
 import jwt from 'jsonwebtoken';
+import {
+  UnauthorizedError,
+  ForbiddenError,
+  InternalServerError
+} from '../utils/errors/httpErrors.js';
 import { EntityStatus } from '@prisma/client';
 import { findUserByIdRepository } from '../repositories/user.js';
 
@@ -6,30 +11,30 @@ export const verifyToken = async (req, res, next) => {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Unauthorized' });
+    throw new UnauthorizedError('Unauthorized', { code: 'NO_AUTH_HEADER' });
   }
 
   const token = authHeader.split(' ')[1];
 
   if (!process.env.JWT_SECRET) {
-    return res.status(500).json({ error: 'Server configuration error' });
+    throw new InternalServerError('Server configuration error', { code: 'SERVER_CONFIG_ERROR' });
   }
 
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
 
     if (!payload?.id) {
-      return res.status(401).json({ error: 'Invalid token payload' });
+      throw new UnauthorizedError('Invalid token payload', { code: 'INVALID_TOKEN_PAYLOAD' });
     }
 
     const user = await findUserByIdRepository(payload.id, { includeDeleted: true });
 
     if (!user || user.status === EntityStatus.DELETED) {
-      return res.status(401).json({ error: 'Account not available' });
+      throw new UnauthorizedError('Account not available', { code: 'ACCOUNT_NOT_AVAILABLE' });
     }
 
     if (user.status === EntityStatus.SUSPENDED) {
-      return res.status(403).json({ error: 'Account suspended' });
+      throw new ForbiddenError('Account suspended', { code: 'ACCOUNT_SUSPENDED' });
     }
 
     req.user = {
@@ -41,9 +46,9 @@ export const verifyToken = async (req, res, next) => {
     return next();
   } catch (error) {
     if (error instanceof jwt.TokenExpiredError) {
-      return res.status(401).json({ error: 'Token expired' });
+      throw new UnauthorizedError('Token expired', { code: 'TOKEN_EXPIRED' });
     }
 
-    return res.status(401).json({ error: 'Invalid token' });
+    throw new UnauthorizedError('Invalid token', { code: 'INVALID_TOKEN' });
   }
 };

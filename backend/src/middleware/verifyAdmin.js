@@ -1,12 +1,13 @@
 import { UserRole } from '@prisma/client';
+import { UnauthorizedError, ForbiddenError } from '../utils/errors/httpErrors.js';
 
 export const verifyAdmin = (req, res, next) => {
   if (!req.user) {
-    return res.status(401).json({ error: 'Unauthorized' });
+    throw new UnauthorizedError('Unauthorized', { code: 'NO_USER' });
   }
 
   if (req.user.role !== UserRole.ADMIN) {
-    return res.status(403).json({ error: 'Forbidden' });
+    throw new ForbiddenError('Forbidden', { code: 'NOT_ADMIN' });
   }
 
   return next();
