@@ -104,7 +104,15 @@ export const updateFormService = async (id, data, userId) => {
 
 export const deleteFormService = async (id, userId) => {
   try {
-    await findFormByIdService(id, userId);
+    const form = await findFormByIdIncludingDeletedRepository(id);
+
+    if (!form || form.userId !== userId) {
+      throw new NotFoundError('Form not found', { code: 'FORM_NOT_FOUND' });
+    }
+
+    if (form.status === EntityStatus.DELETED) {
+      throw new BadRequestError('Form is already deleted', { code: 'FORM_ALREADY_DELETED' });
+    }
 
     return await softDeleteFormRepository(id);
   } catch (error) {
