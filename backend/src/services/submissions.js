@@ -61,9 +61,9 @@ export const createSubmissionService = async ({formId, data}) => {
 
 export const findSubmissionsByFormIdService = async (formId, userId) => {
   try {
-    const form = await findFormByIdService(formId, userId);
+    const form = await findFormByIdIncludingDeletedRepository(formId);
 
-    if (!form) {
+    if (!form || form.userId !== userId || form.status === EntityStatus.DELETED) {
       throw new NotFoundError('Form not found', { code: 'FORM_NOT_FOUND' });
     }
 
