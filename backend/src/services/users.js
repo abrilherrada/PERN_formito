@@ -184,35 +184,32 @@ export const updateUserByIdService = async (userId, data = {}) => {
 
     const { role, status, ...profileData } = data;
     let updatedUser = user;
+    let roleUpdateError = null;
 
-    if (status && status !== updatedUser.status) {
-      if (status === EntityStatus.SUSPENDED && updatedUser.status !== EntityStatus.SUSPENDED) {
-        updatedUser = await suspendUserRepository(userId);
-      } else if (status === EntityStatus.ACTIVE && updatedUser.status !== EntityStatus.ACTIVE) {
-        updatedUser = await restoreUserRepository(userId);
-      } else if (status === EntityStatus.DELETED && updatedUser.status !== EntityStatus.DELETED) {
-        updatedUser = await softDeleteUserRepository(userId);
+    const applyProfileUpdates = async () => {
+      if (!Object.keys(profileData).length) {
+        return;
       }
-    }
 
-    if (role && role !== updatedUser.role) {
-      if (updatedUser.status !== EntityStatus.ACTIVE) {
-        throw new BadRequestError('Cannot change role unless the user is active', {
-          code: 'USER_ROLE_CHANGE_REQUIRES_ACTIVE',
+      if (
+        updatedUser.status !== EntityStatus.ACTIVE &&
+        updatedUser.status !== EntityStatus.SUSPENDED
+      ) {
+        throw new BadRequestError('User must be active or suspended to update profile', {
+          code: 'USER_PROFILE_EDIT_REQUIRES_ACTIVE_OR_SUSPENDED',
         });
       }
 
-      updatedUser = await updateUserRepository(userId, { role });
-    }
-
-    if (updatedUser.status === EntityStatus.ACTIVE) {
       const allowedFields = {};
+
       if (profileData.name && profileData.name !== updatedUser.name) {
         allowedFields.name = profileData.name;
       }
+
       if (profileData.plan && profileData.plan !== updatedUser.plan) {
         allowedFields.plan = profileData.plan;
       }
+
       if (
         profileData.maxSubmissions !== undefined &&
         profileData.maxSubmissions !== updatedUser.maxSubmissions
@@ -223,9 +220,82 @@ export const updateUserByIdService = async (userId, data = {}) => {
       if (Object.keys(allowedFields).length) {
         updatedUser = await updateUserRepository(userId, allowedFields);
       }
+    };
+
+    const applyStatusTransition = async () => {
+      if (!status || status === updatedUser.status) {
+        return;
+      }
+
+      if (status === EntityStatus.DELETED) {
+        if (updatedUser.status === EntityStatus.DELETED) {
+          throw new BadRequestError('User is already deleted', { code: 'USER_ALREADY_DELETED' });
+        }
+
+        updatedUser = await softDeleteUserRepository(userId);
+        return;
+      }
+
+      if (status === EntityStatus.ACTIVE) {
+        if (updatedUser.status === EntityStatus.ACTIVE) {
+          return;
+        }
+
+        updatedUser = await restoreUserRepository(userId);
+        return;
+      }
+
+      if (status === EntityStatus.SUSPENDED) {
+        if (updatedUser.status === EntityStatus.SUSPENDED) {
+          return;
+        }
+
+        if (updatedUser.status === EntityStatus.DELETED) {
+          await restoreUserRepository(userId);
+          updatedUser = await suspendUserRepository(userId);
+          return;
+        }
+
+        updatedUser = await suspendUserRepository(userId);
+        return;
+      }
+
+      throw new BadRequestError('Invalid status transition', {
+        code: 'USER_STATUS_TRANSITION_INVALID',
+      });
+    };
+
+    const applyRoleChange = async () => {
+      if (!role || role === updatedUser.role) {
+        return;
+      }
+
+      const isPromotion = updatedUser.role !== UserRole.ADMIN && role === UserRole.ADMIN;
+      const isDemotion = updatedUser.role === UserRole.ADMIN && role !== UserRole.ADMIN;
+
+      if (isPromotion && updatedUser.status !== EntityStatus.ACTIVE) {
+        roleUpdateError = new BadRequestError('Cannot promote user unless they are active', {
+          code: 'USER_PROMOTION_REQUIRES_ACTIVE',
+        });
+        return;
+      }
+
+      if (isDemotion || isPromotion) {
+        updatedUser = await updateUserRepository(userId, { role });
+      }
+    };
+
+    await applyStatusTransition();
+    await applyProfileUpdates();
+    await applyRoleChange();
+
+    if (roleUpdateError) {
+      throw roleUpdateError;
     }
 
-    return sanitizeUser(updatedUser);
+    const freshUser = await findUserByIdRepository(userId, { includeDeleted: true });
+
+    return sanitizeUser(freshUser ?? updatedUser);
   } catch (error) {
     throw handlePrismaError(error);
   }
