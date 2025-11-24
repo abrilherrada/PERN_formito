@@ -1,3 +1,4 @@
+import { toOrderedEntries } from '../utils/processSubmission.js';
 import { BadRequestError } from '../utils/errors/httpErrors.js';
 
 export const normalizeSubmission = (req, res, next) => {
@@ -11,11 +12,11 @@ export const normalizeSubmission = (req, res, next) => {
     }
   }
 
-  if (payload.data && typeof payload.data === 'object') {
-    req.body = { data: payload.data };
-  } else {
-    req.body = { data: payload };
-  }
+  const data = payload && typeof payload === 'object' ? payload.data ?? payload : payload;
+
+  req.body = {
+    data: toOrderedEntries(data),
+  };
 
   return next();
 };

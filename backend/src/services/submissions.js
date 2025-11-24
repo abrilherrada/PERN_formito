@@ -7,13 +7,13 @@ import {
 } from '../repositories/submission.js';
 import { updateUserRepository, findUserByIdRepository } from '../repositories/user.js';
 import { findFormByIdIncludingDeletedRepository } from '../repositories/form.js';
-import { findFormByIdService } from './forms.js';
 import { sendSubmissionEmail } from './email/sendSubmissionEmail.js';
 import {
   BadRequestError,
   NotFoundError
 } from '../utils/errors/httpErrors.js';
 import { handlePrismaError } from '../utils/errors/prismaErrors.js';
+import { fromOrderedEntries } from '../utils/processSubmission.js';
 import { EntityStatus } from '@prisma/client';
 
 export const createSubmissionService = async ({formId, data}) => {
@@ -42,18 +42,25 @@ export const createSubmissionService = async ({formId, data}) => {
       throw new BadRequestError('Max submissions reached', { code: 'FORM_MAX_SUBMISSIONS_REACHED' });
     }
 
+    const parsedData = fromOrderedEntries(data);
+
     await sendSubmissionEmail({
       to: form.destinationEmail,
       formName: form.name,
       formId,
-      data
+      data: parsedData
     });
 
     await updateUserRepository(account.id, {
       currentSubmissions: account.currentSubmissions + 1,
     });
 
-    return await createSubmissionRepository({ formId, data });
+    const submission = await createSubmissionRepository({ formId, data });
+
+    return {
+      ...submission,
+      data: parsedData,
+    };
   } catch (error) {
     throw handlePrismaError(error);
   }
@@ -67,7 +74,12 @@ export const findSubmissionsByFormIdService = async (formId, userId) => {
       throw new NotFoundError('Form not found', { code: 'FORM_NOT_FOUND' });
     }
 
-    return await findSubmissionsByFormIdRepository(formId);
+    const submissions = await findSubmissionsByFormIdRepository(formId);
+
+    return submissions.map((submission) => ({
+      ...submission,
+      data: fromOrderedEntries(submission.data),
+    }));
   } catch (error) {
     throw handlePrismaError(error);
   }
@@ -81,7 +93,10 @@ export const findSubmissionByIdService = async (id, userId, formId) => {
       throw new NotFoundError('Submission not found', { code: 'SUBMISSION_NOT_FOUND' });
     }
 
-    return submission;
+    return {
+      ...submission,
+      data: fromOrderedEntries(submission.data),
+    };
   } catch (error) {
     throw handlePrismaError(error);
   }
@@ -99,7 +114,12 @@ export const deleteSubmissionService = async ({ id, userId }) => {
       throw new BadRequestError('Submission is already deleted', { code: 'SUBMISSION_ALREADY_DELETED' });
     }
 
-    return await softDeleteSubmissionRepository(id);
+    const deleted = await softDeleteSubmissionRepository(id);
+
+    return {
+      ...deleted,
+      data: fromOrderedEntries(deleted.data),
+    };
   } catch (error) {
     throw handlePrismaError(error);
   }
@@ -117,7 +137,12 @@ export const restoreSubmissionService = async ({ id, userId }) => {
       throw new BadRequestError('Submission is already active', { code: 'SUBMISSION_ALREADY_ACTIVE' });
     }
 
-    return await restoreSubmissionRepository(id);
+    const restored = await restoreSubmissionRepository(id);
+
+    return {
+      ...restored,
+      data: fromOrderedEntries(restored.data),
+    };
   } catch (error) {
     throw handlePrismaError(error);
   }

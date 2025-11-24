@@ -6,8 +6,14 @@ const submissionValueSchema = z.lazy(() =>
     z.number(),
     z.boolean(),
     z.null(),
-    z.array(submissionValueSchema),
-    z.record(z.string(), submissionValueSchema)
+    z.array(
+      z.object({
+        key: z.string(),
+        type: z.enum(['object', 'array']),
+        position: z.number().int().nonnegative(),
+        value: submissionValueSchema,
+      })
+    )
   ])
 );
 
