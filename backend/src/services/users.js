@@ -8,7 +8,11 @@ import {
   suspendUserRepository
 } from '../repositories/user.js';
 import { findUserEmailByEmailRepository } from '../repositories/userEmail.js';
-import { setPrimaryUserEmailService } from './userEmail.js';
+import {
+  createUserEmailService,
+  resendUserEmailVerificationService,
+  setPrimaryUserEmailService
+} from './userEmails.js';
 import {
   BadRequestError,
   NotFoundError
@@ -46,28 +50,28 @@ export const updateCurrentUserService = async (
       throw new NotFoundError('User not found', { code: 'USER_NOT_FOUND' });
     }
 
+    const ops = {
+      updateName: Boolean(name && name !== user.name),
+      updatePassword: Boolean(currentPassword && newPassword),
+      updateEmail: Boolean(newPrimaryEmail && newPrimaryEmail !== user.email)
+    };
+
+    if ((currentPassword && !newPassword) || (!currentPassword && newPassword)) {
+      throw new BadRequestError('Both current password and new password are required', {
+        code: 'USER_PASSWORD_FLOW_INCOMPLETE',
+      });
+    }
+
+    if (ops.updateEmail && !currentPassword) {
+      throw new BadRequestError('Current password is required to update email', { code: 'USER_PASSWORD_REQUIRED' });
+    }
+
     const dataToUpdate = {};
+    let pendingPrimaryEmail;
+    let hasVerifiedCurrentPassword = false;
 
-    if (name && name !== user.name) {
-      dataToUpdate.name = name;
-    }
-
-    if (newPrimaryEmail) {
-      const emailRecord = await findUserEmailByEmailRepository(newPrimaryEmail);
-
-      if (!emailRecord || emailRecord.userId !== userId) {
-        throw new BadRequestError('Email not found', { code: 'USER_EMAIL_NOT_FOUND' });
-      }
-      
-      await setPrimaryUserEmailService({ userId, userEmailId: emailRecord.id });
-    }
-
-    if (currentPassword || newPassword) {
-      if (!currentPassword || !newPassword) {
-        throw new BadRequestError('Both current password and new password are required', {
-          code: 'USER_PASSWORD_FLOW_INCOMPLETE',
-        });
-      }
+    const validateCurrentPassword = async () => {
+      if (hasVerifiedCurrentPassword) return;
 
       const isValid = await bcrypt.compare(currentPassword, user.password);
 
@@ -75,18 +79,51 @@ export const updateCurrentUserService = async (
         throw new BadRequestError('Invalid password', { code: 'USER_INVALID_PASSWORD' });
       }
 
+      hasVerifiedCurrentPassword = true;
+    };
+
+    if (ops.updateName) {
+      dataToUpdate.name = name;
+    }
+
+    if (ops.updatePassword) {
+      await validateCurrentPassword();
+
       const SALT_ROUNDS = parseInt(process.env.BCRYPT_SALT_ROUNDS, 10) || 12;
       const hashedPassword = await bcrypt.hash(newPassword, SALT_ROUNDS);
       dataToUpdate.password = hashedPassword;
     }
 
-    if (!Object.keys(dataToUpdate).length) {
-      return sanitizeUser(user);
+    if (Object.keys(dataToUpdate).length) {
+      await updateUserRepository(userId, dataToUpdate);
     }
 
-    const updated = await updateUserRepository(userId, dataToUpdate);
+    if (ops.updateEmail) {
+      await validateCurrentPassword();
 
-    return sanitizeUser(updated);
+      const emailRecord = await findUserEmailByEmailRepository(newPrimaryEmail);
+
+      if (!emailRecord) {
+        await createUserEmailService({ userId, email: newPrimaryEmail });
+        pendingPrimaryEmail = newPrimaryEmail;
+      } else if (emailRecord.userId !== userId) {
+        throw new BadRequestError('Cannot use this email', { code: 'USER_EMAIL_FORBIDDEN' });
+      } else if (emailRecord.emailVerifiedAt) {
+        await setPrimaryUserEmailService({ userId, userEmailId: emailRecord.id });
+      } else if (!emailRecord.emailVerifiedAt) {
+        await resendUserEmailVerificationService({ userId, userEmailId: emailRecord.id });
+        pendingPrimaryEmail = newPrimaryEmail;
+      }
+    }
+
+    const freshUser = await findUserByIdRepository(userId);
+    const sanitized = sanitizeUser(freshUser);
+
+    if (pendingPrimaryEmail) {
+      sanitized.pendingPrimaryEmail = pendingPrimaryEmail;
+    }
+
+    return sanitized;
   } catch (error) {
     throw handlePrismaError(error);
   }

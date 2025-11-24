@@ -34,11 +34,16 @@ export const updateCurrentUserSchema = z
     }
   )
   .refine(
-    (data) =>
-      (data.currentPassword && data.newPassword) ||
-      (!data.currentPassword && !data.newPassword),
+    (data) => !(data.newPassword && !data.currentPassword),
     {
-      message: 'Both currentPassword and newPassword are required to update the password',
+      message: 'Current password is required to update the password',
+      path: ['currentPassword'],
+    }
+  )
+  .refine(
+    (data) => !(data.newPrimaryEmail && !data.currentPassword),
+    {
+      message: 'Current password is required to update the email',
       path: ['currentPassword'],
     }
   );
