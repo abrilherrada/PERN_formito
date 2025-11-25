@@ -5,8 +5,10 @@ export const updateUserRepository = async (userId, data) => {
   return await prisma.user.update({
     where: {
       id: userId,
-      status: EntityStatus.ACTIVE,
-      deletedAt: null
+      deletedAt: null,
+      status: {
+        in: [EntityStatus.ACTIVE, EntityStatus.SUSPENDED],
+      },
     },
     data,
   });
@@ -62,12 +64,15 @@ export const softDeleteUserRepository = async (userId) => {
   return prisma.user.update({
     where: {
       id: userId,
-      status: EntityStatus.ACTIVE
+      status: {
+        in: [EntityStatus.ACTIVE, EntityStatus.SUSPENDED],
+      },
+      deletedAt: null,
     },
     data: {
       status: EntityStatus.DELETED,
       deletedAt: new Date()
-    }
+    },
   });
 };
 

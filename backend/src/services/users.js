@@ -18,7 +18,7 @@ import {
   NotFoundError
 } from '../utils/errors/httpErrors.js';
 import { handlePrismaError } from '../utils/errors/prismaErrors.js';
-import { EntityStatus } from '@prisma/client';
+import { EntityStatus, UserRole } from '@prisma/client';
 import { sanitizeUser } from '../utils/sanitizeUser.js';
 
 export const findCurrentUserService = async (userId) => {
@@ -56,9 +56,9 @@ export const updateCurrentUserService = async (
       updateEmail: Boolean(newPrimaryEmail && newPrimaryEmail !== user.email)
     };
 
-    if ((currentPassword && !newPassword) || (!currentPassword && newPassword)) {
-      throw new BadRequestError('Both current password and new password are required', {
-        code: 'USER_PASSWORD_FLOW_INCOMPLETE',
+    if (newPassword && !currentPassword) {
+      throw new BadRequestError('Current password is required to update password', {
+        code: 'USER_PASSWORD_REQUIRED',
       });
     }
 
@@ -185,6 +185,7 @@ export const updateUserByIdService = async (userId, data = {}) => {
     const { role, status, ...profileData } = data;
     let updatedUser = user;
     let roleUpdateError = null;
+    let didMutate = false;
 
     const applyProfileUpdates = async () => {
       if (!Object.keys(profileData).length) {
@@ -219,6 +220,7 @@ export const updateUserByIdService = async (userId, data = {}) => {
 
       if (Object.keys(allowedFields).length) {
         updatedUser = await updateUserRepository(userId, allowedFields);
+        didMutate = true;
       }
     };
 
@@ -233,6 +235,7 @@ export const updateUserByIdService = async (userId, data = {}) => {
         }
 
         updatedUser = await softDeleteUserRepository(userId);
+        didMutate = true;
         return;
       }
 
@@ -242,6 +245,7 @@ export const updateUserByIdService = async (userId, data = {}) => {
         }
 
         updatedUser = await restoreUserRepository(userId);
+        didMutate = true;
         return;
       }
 
@@ -253,10 +257,12 @@ export const updateUserByIdService = async (userId, data = {}) => {
         if (updatedUser.status === EntityStatus.DELETED) {
           await restoreUserRepository(userId);
           updatedUser = await suspendUserRepository(userId);
+          didMutate = true;
           return;
         }
 
         updatedUser = await suspendUserRepository(userId);
+        didMutate = true;
         return;
       }
 
@@ -282,6 +288,7 @@ export const updateUserByIdService = async (userId, data = {}) => {
 
       if (isDemotion || isPromotion) {
         updatedUser = await updateUserRepository(userId, { role });
+        didMutate = true;
       }
     };
 
@@ -291,6 +298,10 @@ export const updateUserByIdService = async (userId, data = {}) => {
 
     if (roleUpdateError) {
       throw roleUpdateError;
+    }
+
+    if (!didMutate) {
+      throw new BadRequestError('No new data provided', { code: 'NO_NEW_USER_DATA' });
     }
 
     const freshUser = await findUserByIdRepository(userId, { includeDeleted: true });
