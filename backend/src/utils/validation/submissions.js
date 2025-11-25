@@ -27,5 +27,5 @@ export const submissionDetailParamsSchema = z.object({
 });
 
 export const submissionBodySchema = z.object({
-  data: z.record(z.string(), submissionValueSchema)
+  data: submissionValueSchema
 });
