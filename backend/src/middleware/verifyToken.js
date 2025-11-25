@@ -49,6 +49,10 @@ export const verifyToken = async (req, res, next) => {
       throw new UnauthorizedError('Token expired', { code: 'TOKEN_EXPIRED' });
     }
 
+    if (error instanceof UnauthorizedError || error instanceof ForbiddenError) {
+      throw error;
+    }
+
     throw new UnauthorizedError('Invalid token', { code: 'INVALID_TOKEN' });
   }
 };
