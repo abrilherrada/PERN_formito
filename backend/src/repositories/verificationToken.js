@@ -63,3 +63,17 @@ export const deleteExpiredTokensRepository = async (timestamp) => {
     where: { expiresAt: { lt: timestamp } }
   });
 };
+
+export const deleteTokensByUserIdsRepository = async (userIds) => {
+  if (!userIds.length) {
+    return { count: 0 };
+  }
+
+  return prisma.verificationToken.deleteMany({
+    where: {
+      userId: {
+        in: userIds,
+      },
+    },
+  });
+};

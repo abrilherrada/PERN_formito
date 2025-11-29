@@ -44,10 +44,6 @@ export const softDeleteFormRepository = async (id) => {
   });
 };
 
-export const hardDeleteFormRepository = async (id) => {
-  return await prisma.form.delete({ where: { id } });
-};
-
 export const restoreFormRepository = async (id) => {
   return await prisma.form.update({
     where: { id },
@@ -70,5 +66,31 @@ export const suspendFormRepository = async (id) => {
 export const findFormByIdIncludingDeletedRepository = async (id) => {
   return await prisma.form.findFirst({
     where: { id }
+  });
+};
+
+export const findSoftDeletedFormsRepository = async (cutoffDate) => {
+  return prisma.form.findMany({
+    where: {
+      status: EntityStatus.DELETED,
+      deletedAt: {
+        not: null,
+        lt: cutoffDate,
+      },
+      OR: [
+        { purgedAt: null },
+        { purgedAt: undefined },
+      ],
+    },
+    include: {
+      submissions: true,
+    },
+  });
+};
+
+export const anonymizeFormRepository = async (formId, data) => {
+  return prisma.form.update({
+    where: { id: formId },
+    data,
   });
 };

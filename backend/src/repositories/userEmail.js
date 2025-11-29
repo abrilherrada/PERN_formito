@@ -48,3 +48,10 @@ export const deleteUserEmailRepository = async (userEmailId) => {
     where: { id: userEmailId }
   });
 };
+
+export const anonymizeUserEmailRepository = async (userEmailId, data) => {
+  return prisma.userEmail.update({
+    where: { id: userEmailId },
+    data,
+  });
+};

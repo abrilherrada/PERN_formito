@@ -49,11 +49,7 @@ export const restoreSubmissionRepository = async (id) => {
   });
 };
 
-export const hardDeleteSubmissionRepository = async (id) => {
-  return await prisma.submission.delete({ where: { id } });
-};
-
-export const findDeletedSubmissionsRepository = async (cutoffDate) => {
+export const findSoftDeletedSubmissionsRepository = async (cutoffDate) => {
   return prisma.submission.findMany({
     where: {
       status: EntityStatus.DELETED,
@@ -61,6 +57,17 @@ export const findDeletedSubmissionsRepository = async (cutoffDate) => {
         not: null,
         lt: cutoffDate,
       },
+      OR: [
+        { purgedAt: null },
+        { purgedAt: undefined },
+      ],
     },
+  });
+};
+
+export const anonymizeSubmissionRepository = async (submissionId, data) => {
+  return prisma.submission.update({
+    where: { id: submissionId },
+    data,
   });
 };

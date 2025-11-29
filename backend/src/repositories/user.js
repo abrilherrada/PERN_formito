@@ -76,10 +76,6 @@ export const softDeleteUserRepository = async (userId) => {
   });
 };
 
-export const hardDeleteUserRepository = async (userId) => {
-  return prisma.user.delete({ where: { id: userId } });
-};
-
 export const restoreUserRepository = async (userId) => {
   return prisma.user.update({
     where: {
@@ -99,5 +95,36 @@ export const suspendUserRepository = async (userId) => {
   return prisma.user.update({
     where: { id: userId, deletedAt: null },
     data: { status: EntityStatus.SUSPENDED },
+  });
+};
+
+export const findSoftDeletedUsersRepository = async (cutoffDate) => {
+  return prisma.user.findMany({
+    where: {
+      status: EntityStatus.DELETED,
+      deletedAt: {
+        not: null,
+        lt: cutoffDate,
+      },
+      OR: [
+        { purgedAt: null },
+        { purgedAt: undefined },
+      ],
+    },
+    include: {
+      userEmails: true,
+      forms: {
+        include: {
+          submissions: true,
+        },
+      },
+    },
+  });
+};
+
+export const anonymizeUserRepository = async (userId, data) => {
+  return prisma.user.update({
+    where: { id: userId },
+    data,
   });
 };
