@@ -8,7 +8,8 @@
     "dev": "nodemon src/index.js",
     "test": "jest",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "purge:soft-deleted": "node scripts/purgeSoftDeleted.js"
   },
   "keywords": [],
   "author": "",
