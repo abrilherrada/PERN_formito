@@ -9,22 +9,25 @@ datasource db {
 }
 
 model User {
-  id                 String       @id @default(cuid())
-  name               String
-  email              String       @unique
-  password           String
-  role               UserRole     @default(USER)
-  status             EntityStatus @default(ACTIVE)
-  plan               Plan         @default(FREE)
-  maxSubmissions     Int          @default(50)
-  currentSubmissions Int          @default(0)
-  createdAt          DateTime     @default(now())
-  updatedAt          DateTime     @updatedAt
-  deletedAt          DateTime?
-  purgedAt           DateTime?
-  forms              Form[]
-  verificationTokens VerificationToken[]
-  userEmails         UserEmail[]
+  id                      String             @id @default(cuid())
+  name                    String
+  email                   String             @unique
+  password                String
+  role                    UserRole           @default(USER)
+  status                  EntityStatus       @default(ACTIVE)
+  plan                    Plan               @default(FREE)
+  maxSubmissions          Int                @default(50)
+  currentSubmissions      Int                @default(0)
+  lastSubmissionResetAt   DateTime?
+  nextSubmissionResetAt   DateTime?
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
+  deletedAt               DateTime?
+  purgedAt                DateTime?
+  forms                   Form[]
+  verificationTokens      VerificationToken[]
+  userEmails              UserEmail[]
+  submissionUsageResets   SubmissionUsageReset[]
 }
 
 model Form {
@@ -42,15 +45,29 @@ model Form {
 }
 
 model Submission {
-  id        String   @id @default(cuid())
+  id        String       @id @default(cuid())
   formId    String
-  form      Form     @relation(fields: [formId], references: [id])
+  form      Form         @relation(fields: [formId], references: [id])
   data      Json
   metadata  Json?
   status    EntityStatus @default(ACTIVE)
-  createdAt DateTime @default(now())
+  createdAt DateTime     @default(now())
   deletedAt DateTime?
   purgedAt  DateTime?
+}
+
+model SubmissionUsageReset {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id])
+  periodStart       DateTime
+  periodEnd         DateTime
+  submissionsCount  Int
+  maxSubmissions    Int
+  plan              Plan
+  resetAt           DateTime @default(now())
+  triggeredBy       String
+  createdAt         DateTime @default(now())
 }
 
 model UserEmail {

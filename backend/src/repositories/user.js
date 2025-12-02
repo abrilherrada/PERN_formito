@@ -1,8 +1,10 @@
 import { prisma } from '../../prisma/client.js';
 import { EntityStatus } from '@prisma/client';
 
-export const updateUserRepository = async (userId, data) => {
-  return await prisma.user.update({
+export const updateUserRepository = async (userId, data, { client } = {}) => {
+  const db = client ?? prisma;
+
+  return await db.user.update({
     where: {
       id: userId,
       deletedAt: null,
@@ -57,6 +59,24 @@ export const findUsersRepository = async ({
     take,
     skip,
     orderBy: { createdAt: 'desc' },
+  });
+};
+
+export const findUsersDueForSubmissionResetRepository = async (referenceDate) => {
+  return prisma.user.findMany({
+    where: {
+      deletedAt: null,
+      status: {
+        in: [EntityStatus.ACTIVE, EntityStatus.SUSPENDED],
+      },
+      OR: [
+        { nextSubmissionResetAt: null },
+        { nextSubmissionResetAt: { lte: referenceDate } },
+      ],
+    },
+    orderBy: {
+      createdAt: 'asc',
+    },
   });
 };
 
