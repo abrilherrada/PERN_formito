@@ -9,7 +9,8 @@
     "test": "jest",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "purge:soft-deleted": "node scripts/purgeSoftDeleted.js"
+    "purge:soft-deleted": "node scripts/purgeSoftDeleted.js",
+    "reset:submissions": "node scripts/resetSubmissionCounter.js"
   },
   "keywords": [],
   "author": "",
