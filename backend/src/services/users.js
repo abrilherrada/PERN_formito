@@ -13,6 +13,7 @@ import {
   resendUserEmailVerificationService,
   setPrimaryUserEmailService
 } from './userEmails.js';
+import { revokeAllTokensForUser } from './sessionTokens.js';
 import {
   BadRequestError,
   NotFoundError
@@ -69,6 +70,7 @@ export const updateCurrentUserService = async (
     const dataToUpdate = {};
     let pendingPrimaryEmail;
     let hasVerifiedCurrentPassword = false;
+    let shouldRevokeSessions = false;
 
     const validateCurrentPassword = async () => {
       if (hasVerifiedCurrentPassword) return;
@@ -92,6 +94,7 @@ export const updateCurrentUserService = async (
       const SALT_ROUNDS = parseInt(process.env.BCRYPT_SALT_ROUNDS, 10) || 12;
       const hashedPassword = await bcrypt.hash(newPassword, SALT_ROUNDS);
       dataToUpdate.password = hashedPassword;
+      shouldRevokeSessions = true;
     }
 
     if (Object.keys(dataToUpdate).length) {
@@ -110,6 +113,7 @@ export const updateCurrentUserService = async (
         throw new BadRequestError('Cannot use this email', { code: 'USER_EMAIL_FORBIDDEN' });
       } else if (emailRecord.emailVerifiedAt) {
         await setPrimaryUserEmailService({ userId, userEmailId: emailRecord.id });
+        shouldRevokeSessions = true;
       } else if (!emailRecord.emailVerifiedAt) {
         await resendUserEmailVerificationService({ userId, userEmailId: emailRecord.id });
         pendingPrimaryEmail = newPrimaryEmail;
@@ -121,6 +125,10 @@ export const updateCurrentUserService = async (
 
     if (pendingPrimaryEmail) {
       sanitized.pendingPrimaryEmail = pendingPrimaryEmail;
+    }
+
+    if (shouldRevokeSessions) {
+      await revokeAllTokensForUser(userId, { reason: 'USER_CREDENTIALS_UPDATED' });
     }
 
     return sanitized;
@@ -142,6 +150,8 @@ export const deleteCurrentUserService = async (userId) => {
     }
 
     const deleted = await softDeleteUserRepository(userId);
+
+    await revokeAllTokensForUser(userId, { reason: 'USER_SELF_DELETED' });
 
     return sanitizeUser(deleted);
   } catch (error) {
@@ -186,6 +196,8 @@ export const updateUserByIdService = async (userId, data = {}) => {
     let updatedUser = user;
     let roleUpdateError = null;
     let didMutate = false;
+    let shouldRevokeSessions = false;
+    let revokeReason = null;
 
     const applyProfileUpdates = async () => {
       if (!Object.keys(profileData).length) {
@@ -236,6 +248,8 @@ export const updateUserByIdService = async (userId, data = {}) => {
 
         updatedUser = await softDeleteUserRepository(userId);
         didMutate = true;
+        shouldRevokeSessions = true;
+        revokeReason = revokeReason ?? 'USER_STATUS_DELETED';
         return;
       }
 
@@ -258,11 +272,15 @@ export const updateUserByIdService = async (userId, data = {}) => {
           await restoreUserRepository(userId);
           updatedUser = await suspendUserRepository(userId);
           didMutate = true;
+          shouldRevokeSessions = true;
+          revokeReason = revokeReason ?? 'USER_STATUS_SUSPENDED';
           return;
         }
 
         updatedUser = await suspendUserRepository(userId);
         didMutate = true;
+        shouldRevokeSessions = true;
+        revokeReason = revokeReason ?? 'USER_STATUS_SUSPENDED';
         return;
       }
 
@@ -289,6 +307,8 @@ export const updateUserByIdService = async (userId, data = {}) => {
       if (isDemotion || isPromotion) {
         updatedUser = await updateUserRepository(userId, { role });
         didMutate = true;
+        shouldRevokeSessions = true;
+        revokeReason = revokeReason ?? 'USER_ROLE_CHANGED';
       }
     };
 
@@ -305,6 +325,10 @@ export const updateUserByIdService = async (userId, data = {}) => {
     }
 
     const freshUser = await findUserByIdRepository(userId, { includeDeleted: true });
+
+    if (shouldRevokeSessions) {
+      await revokeAllTokensForUser(userId, { reason: revokeReason ?? 'USER_PROFILE_UPDATED' });
+    }
 
     return sanitizeUser(freshUser ?? updatedUser);
   } catch (error) {

@@ -11,8 +11,16 @@ import {
   findPrimaryUserEmailRepository
 } from '../repositories/userEmail.js';
 import {
+  createSessionToken,
+  rotateSessionToken,
+  revokeSessionToken,
+  revokeSessionByRefreshToken,
+  revokeAllTokensForUser,
+} from './sessionTokens.js';
+import {
   updateUserRepository,
-  findUserByEmailRepository
+  findUserByEmailRepository,
+  findUserByIdRepository
 } from '../repositories/user.js';
 import {
   InternalServerError,
@@ -87,7 +95,19 @@ export const registerService = async (data) => {
   }
 };
 
-export const loginService = async ({ email, password }) => {
+const createAccessToken = (account) => {
+  if (!process.env.JWT_SECRET) {
+    throw new InternalServerError('JWT_SECRET is not defined');
+  }
+
+  const tokenPayload = { id: account.id, role: account.role, status: account.status };
+
+  return jwt.sign(tokenPayload, process.env.JWT_SECRET, {
+    expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m',
+  });
+};
+
+export const loginService = async ({ email, password }, { userAgent = null, ipAddress = null } = {}) => {
   try {
     const account = await loginRepository(email, { includeDeleted: true });
 
@@ -115,16 +135,18 @@ export const loginService = async ({ email, password }) => {
       throw new UnauthorizedError('Email not verified', { code: 'AUTH_EMAIL_NOT_VERIFIED' });
     }
 
-    if (!process.env.JWT_SECRET) {
-      throw new InternalServerError('JWT_SECRET is not defined');
-    }
+    const accessToken = createAccessToken(account);
 
-    const tokenPayload = { id: account.id, role: account.role, status: account.status };
-    const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, {
-      expiresIn: process.env.JWT_EXPIRES_IN || '1d',
+    const { token: refreshToken } = await createSessionToken(account.id, {
+      userAgent,
+      ipAddress,
     });
 
-    return { token, user: sanitizeUser(account) };
+    return {
+      accessToken,
+      refreshToken,
+      user: sanitizeUser(account),
+    };
   } catch (error) {
     throw handlePrismaError(error);
   }
@@ -266,12 +288,85 @@ export const resetPasswordService = async (selector, tokenValue, newPassword) =>
     });
 
     await deleteTokensByUserIdService(token.userId, VerificationTokenType.PASSWORD_RESET);
+    await revokeAllTokensForUser(token.userId, { reason: 'USER_PASSWORD_RESET' });
 
     return {
       userId: token.userId,
       message: 'Password reset successfully.',
     };
   } catch (error) {
+    throw handlePrismaError(error);
+  }
+};
+
+export const refreshAccessTokenService = async (
+  refreshToken,
+  { userAgent = null, ipAddress = null } = {}
+) => {
+  try {
+    const { token: newRefreshToken, sessionToken: newSession } = await rotateSessionToken(refreshToken, {
+      userAgent,
+      ipAddress,
+    });
+
+    const account = await findUserByIdRepository(newSession.userId, { includeDeleted: true });
+
+    if (!account) {
+      throw new UnauthorizedError('Invalid session', { code: 'AUTH_SESSION_USER_NOT_FOUND' });
+    }
+
+    if (account.status === EntityStatus.DELETED) {
+      throw new UnauthorizedError('Account deleted', { code: 'AUTH_ACCOUNT_DELETED' });
+    }
+
+    if (account.status === EntityStatus.SUSPENDED) {
+      throw new UnauthorizedError('Account suspended', { code: 'AUTH_ACCOUNT_SUSPENDED' });
+    }
+
+    const primaryEmail = await findPrimaryUserEmailRepository(account.id);
+
+    if (!primaryEmail || !primaryEmail.emailVerifiedAt) {
+      throw new UnauthorizedError('Email not verified', { code: 'AUTH_EMAIL_NOT_VERIFIED' });
+    }
+
+    const accessToken = createAccessToken(account);
+
+    return {
+      accessToken,
+      refreshToken: newRefreshToken,
+      user: sanitizeUser(account),
+    };
+  } catch (error) {
+    if (error instanceof UnauthorizedError || error instanceof BadRequestError) {
+      throw error;
+    }
+
+    throw handlePrismaError(error);
+  }
+};
+
+export const logoutService = async ({ refreshToken, sessionTokenId } = {}) => {
+  if (!refreshToken && !sessionTokenId) {
+    throw new BadRequestError('Refresh token or session token id is required', {
+      code: 'SESSION_IDENTIFIER_REQUIRED',
+    });
+  }
+
+  try {
+    const reason = 'LOGOUT';
+
+    if (refreshToken) {
+      const revoked = await revokeSessionByRefreshToken(refreshToken, { reason });
+      return { sessionTokenId: revoked.id, revoked: true };
+    }
+
+    const revoked = await revokeSessionToken(sessionTokenId, { reason });
+    return { sessionTokenId: revoked.id, revoked: true };
+  } catch (error) {
+    if (error instanceof UnauthorizedError || error instanceof BadRequestError) {
+      throw error;
+    }
+
     throw handlePrismaError(error);
   }
 };
