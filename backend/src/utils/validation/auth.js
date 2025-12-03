@@ -33,3 +33,15 @@ export const passwordResetConfirmSchema = z.object({
   message: 'Passwords do not match',
   path: ['confirmPassword'],
 });
+
+export const refreshTokenSchema = z.object({
+  refreshToken: z.string().min(1, 'Refresh token cannot be empty').optional(),
+}).strict();
+
+export const logoutSchema = z.object({
+  refreshToken: z.string().min(1, 'Refresh token cannot be empty').optional(),
+  sessionTokenId: z.string().uuid('Invalid session token id').optional(),
+}).strict().refine((data) => data.refreshToken || data.sessionTokenId, {
+  message: 'Refresh token or session token id is required',
+  path: ['refreshToken'],
+});

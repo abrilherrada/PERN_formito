@@ -4,8 +4,15 @@ import {
   resendVerificationService,
   verifyEmailService,
   requestPasswordResetService,
-  resetPasswordService
+  resetPasswordService,
+  refreshAccessTokenService,
+  logoutService,
 } from '../services/auth.js';
+import {
+  setRefreshTokenCookie,
+  clearRefreshTokenCookie,
+  getRefreshTokenCookieName,
+} from '../utils/manageSessionToken.js';
 
 export const registerUser = async (req, res, next) => {
   try {
@@ -20,11 +27,22 @@ export const registerUser = async (req, res, next) => {
 
 export const loginUser = async (req, res, next) => {
   try {
-    const { token, user } = await loginService(req.validatedData.body);
+    const {
+      headers: { 'user-agent': userAgent = null },
+      ip = null,
+    } = req;
+
+    const { accessToken, refreshToken, user } = await loginService(req.validatedData.body, {
+      userAgent,
+      ipAddress: ip,
+    });
+
+    setRefreshTokenCookie(res, refreshToken);
+
     res
       .status(200)
-      .header('Authorization', `Bearer ${token}`)
-      .json({ token, user });
+      .header('Authorization', `Bearer ${accessToken}`)
+      .json({ token: accessToken, user });
   } catch (error) {
     next(error);
   }
@@ -69,6 +87,56 @@ export const confirmPasswordReset = async (req, res, next) => {
     const { selector, token, newPassword } = req.validatedData.body;
     const result = await resetPasswordService(selector, token, newPassword);
     res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const refreshAccessToken = async (req, res, next) => {
+  try {
+    const {
+      headers: { 'user-agent': userAgent = null },
+      ip = null,
+    } = req;
+
+    const cookieName = getRefreshTokenCookieName();
+    const refreshTokenFromCookie = req.cookies?.[cookieName] ?? null;
+    const refreshTokenFromBody =
+      req.validatedData?.body?.refreshToken ?? req.body?.refreshToken ?? null;
+
+    const { accessToken, refreshToken: newRefreshToken, user } = await refreshAccessTokenService(
+      refreshTokenFromCookie ?? refreshTokenFromBody,
+      {
+        userAgent,
+        ipAddress: ip,
+      }
+    );
+
+    setRefreshTokenCookie(res, newRefreshToken);
+
+    res
+      .status(200)
+      .header('Authorization', `Bearer ${accessToken}`)
+      .json({ token: accessToken, user });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const logoutUser = async (req, res, next) => {
+  try {
+    const cookieName = getRefreshTokenCookieName();
+    const refreshTokenFromCookie = req.cookies?.[cookieName] ?? null;
+    const { refreshToken: refreshTokenFromBody = null, sessionTokenId = null } =
+      req.validatedData?.body ?? req.body ?? {};
+
+    await logoutService({
+      refreshToken: refreshTokenFromCookie ?? refreshTokenFromBody,
+      sessionTokenId,
+    });
+
+    clearRefreshTokenCookie(res);
+    res.status(204).send();
   } catch (error) {
     next(error);
   }
