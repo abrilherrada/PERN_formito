@@ -27,6 +27,7 @@ model User {
   forms                   Form[]
   verificationTokens      VerificationToken[]
   userEmails              UserEmail[]
+  sessionTokens           SessionToken[]
   submissionUsageResets   SubmissionUsageReset[]
 }
 
@@ -95,6 +96,25 @@ model VerificationToken {
   expiresAt     DateTime
   usedAt        DateTime?
   createdAt     DateTime                      @default(now())
+}
+
+model SessionToken {
+  id                String         @id @default(cuid())
+  userId            String
+  user              User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash         String         @unique
+  userAgent         String?
+  ipAddress         String?
+  createdAt         DateTime       @default(now())
+  expiresAt         DateTime
+  revokedAt         DateTime?
+  revokedReason     String?
+  replacedByTokenId String?        @unique
+  replacedByToken   SessionToken?  @relation("SessionTokenReplacement", fields: [replacedByTokenId], references: [id])
+  rotatedFrom       SessionToken?  @relation("SessionTokenReplacement")
+
+  @@index([userId])
+  @@index([tokenHash])
 }
 
 enum Plan {
