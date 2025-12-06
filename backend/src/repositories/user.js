@@ -118,6 +118,15 @@ export const suspendUserRepository = async (userId) => {
   });
 };
 
+export const updateUserCredentialsTimestampRepository = async (userId, { client } = {}) => {
+  const db = client ?? prisma;
+
+  return await db.user.update({
+    where: { id: userId },
+    data: { credentialsUpdatedAt: new Date() },
+  });
+};
+
 export const findSoftDeletedUsersRepository = async (cutoffDate) => {
   return prisma.user.findMany({
     where: {

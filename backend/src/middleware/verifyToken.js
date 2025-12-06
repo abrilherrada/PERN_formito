@@ -37,6 +37,20 @@ export const verifyToken = async (req, res, next) => {
       throw new ForbiddenError('Account suspended', { code: 'ACCOUNT_SUSPENDED' });
     }
 
+    if (user.credentialsUpdatedAt) {
+      const issuedAtSeconds = payload.iat;
+      if (!issuedAtSeconds) {
+        throw new UnauthorizedError('Invalid token payload', { code: 'INVALID_TOKEN_NO_IAT' });
+      }
+
+      const tokenIssuedAt = new Date(issuedAtSeconds * 1000);
+      if (tokenIssuedAt < user.credentialsUpdatedAt) {
+        throw new UnauthorizedError('Token issued before latest credential update', {
+          code: 'TOKEN_STALE',
+        });
+      }
+    }
+
     req.user = {
       id: user.id,
       role: user.role,

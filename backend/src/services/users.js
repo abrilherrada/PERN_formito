@@ -5,7 +5,8 @@ import {
   findUsersRepository,
   softDeleteUserRepository,
   restoreUserRepository,
-  suspendUserRepository
+  suspendUserRepository,
+  updateUserCredentialsTimestampRepository
 } from '../repositories/user.js';
 import { findUserEmailByEmailRepository } from '../repositories/userEmail.js';
 import {
@@ -128,6 +129,7 @@ export const updateCurrentUserService = async (
     }
 
     if (shouldRevokeSessions) {
+      await updateUserCredentialsTimestampRepository(userId);
       await revokeAllTokensForUser(userId, { reason: 'USER_CREDENTIALS_UPDATED' });
     }
 
@@ -151,6 +153,7 @@ export const deleteCurrentUserService = async (userId) => {
 
     const deleted = await softDeleteUserRepository(userId);
 
+    await updateUserCredentialsTimestampRepository(userId);
     await revokeAllTokensForUser(userId, { reason: 'USER_SELF_DELETED' });
 
     return sanitizeUser(deleted);
@@ -204,15 +207,6 @@ export const updateUserByIdService = async (userId, data = {}) => {
         return;
       }
 
-      if (
-        updatedUser.status !== EntityStatus.ACTIVE &&
-        updatedUser.status !== EntityStatus.SUSPENDED
-      ) {
-        throw new BadRequestError('User must be active or suspended to update profile', {
-          code: 'USER_PROFILE_EDIT_REQUIRES_ACTIVE_OR_SUSPENDED',
-        });
-      }
-
       const allowedFields = {};
 
       if (profileData.name && profileData.name !== updatedUser.name) {
@@ -230,10 +224,21 @@ export const updateUserByIdService = async (userId, data = {}) => {
         allowedFields.maxSubmissions = profileData.maxSubmissions;
       }
 
-      if (Object.keys(allowedFields).length) {
-        updatedUser = await updateUserRepository(userId, allowedFields);
-        didMutate = true;
+      if (!Object.keys(allowedFields).length) {
+        return;
       }
+
+      if (
+        updatedUser.status !== EntityStatus.ACTIVE &&
+        updatedUser.status !== EntityStatus.SUSPENDED
+      ) {
+        throw new BadRequestError('User must be active or suspended to update profile', {
+          code: 'USER_PROFILE_EDIT_REQUIRES_ACTIVE_OR_SUSPENDED',
+        });
+      }
+
+      updatedUser = await updateUserRepository(userId, allowedFields);
+      didMutate = true;
     };
 
     const applyStatusTransition = async () => {
@@ -327,6 +332,7 @@ export const updateUserByIdService = async (userId, data = {}) => {
     const freshUser = await findUserByIdRepository(userId, { includeDeleted: true });
 
     if (shouldRevokeSessions) {
+      await updateUserCredentialsTimestampRepository(userId);
       await revokeAllTokensForUser(userId, { reason: revokeReason ?? 'USER_PROFILE_UPDATED' });
     }
 
@@ -349,6 +355,9 @@ export const deleteUserByIdService = async (userId) => {
     }
 
     const deleted = await softDeleteUserRepository(userId);
+
+    await updateUserCredentialsTimestampRepository(userId);
+    await revokeAllTokensForUser(userId, { reason: 'USER_STATUS_DELETED' });
 
     return sanitizeUser(deleted);
   } catch (error) {
