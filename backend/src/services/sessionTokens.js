@@ -115,6 +115,19 @@ export const revokeSessionByRefreshToken = async (
       includeRelations: true,
     });
 
+    if (!existingToken) {
+      throw new UnauthorizedError('Invalid refresh token', {
+        code: 'SESSION_TOKEN_NOT_FOUND',
+      });
+    }
+
+    if (existingToken.revokedAt) {
+      throw new UnauthorizedError('Refresh token has been revoked', {
+        code: 'SESSION_TOKEN_REVOKED',
+        ...(existingToken.revokedReason ? { detail: existingToken.revokedReason } : {}),
+      });
+    }
+
     assertSessionTokenActive(existingToken);
 
     await revokeSessionToken(existingToken.id, { reason, revokedAt });

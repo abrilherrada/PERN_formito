@@ -39,9 +39,16 @@ export const refreshTokenSchema = z.object({
 }).strict();
 
 export const logoutSchema = z.object({
-  refreshToken: z.string().min(1, 'Refresh token cannot be empty').optional(),
-  sessionTokenId: z.string().uuid('Invalid session token id').optional(),
-}).strict().refine((data) => data.refreshToken || data.sessionTokenId, {
-  message: 'Refresh token or session token id is required',
-  path: ['refreshToken'],
-});
+    refreshToken: z.string().min(1, 'Refresh token cannot be empty').optional(),
+    sessionTokenId: z.string().cuid('Invalid session token id').optional(),
+  })
+  .strict()
+  .superRefine((data, ctx) => {
+    if (!data.refreshToken && !data.sessionTokenId && Object.keys(data).length > 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Refresh token or session token id is required',
+        path: ['refreshToken'],
+      });
+    }
+  });

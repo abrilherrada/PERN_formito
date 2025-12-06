@@ -133,6 +133,7 @@ export const logoutUser = async (req, res, next) => {
     await logoutService({
       refreshToken: refreshTokenFromCookie ?? refreshTokenFromBody,
       sessionTokenId,
+      currentUser: req.user ?? null,
     });
 
     clearRefreshTokenCookie(res);

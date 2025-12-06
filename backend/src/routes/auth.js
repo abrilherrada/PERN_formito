@@ -1,5 +1,6 @@
 import express from 'express';
 import { validateRequest } from '../middleware/validateRequest.js';
+import { optionalVerifyToken } from '../middleware/optionalVerifyToken.js';
 import {
   registerUserSchema,
   loginUserSchema,
@@ -67,6 +68,7 @@ router.post(
 
 router.post(
   '/logout',
+  optionalVerifyToken,
   validateRequest(logoutSchema),
   logoutUser
 );

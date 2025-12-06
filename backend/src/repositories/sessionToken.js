@@ -41,6 +41,18 @@ export const createSessionTokenRepository = async ({
   });
 };
 
+export const findSessionTokenByIdRepository = async (
+  sessionTokenId,
+  { includeUser = false, includeRelations = false } = {}
+) => {
+  const include = buildInclude({ includeUser, includeRelations });
+
+  return await prisma.sessionToken.findUnique({
+    where: { id: sessionTokenId },
+    ...(include ? { include } : {}),
+  });
+};
+
 export const findSessionTokenByHashRepository = async (
   tokenHash,
   { includeUser = false, includeRelations = false } = {}

@@ -1,6 +1,9 @@
 export const validateRequest = (schema, location = 'body') => {
   return (req, res, next) => {
-    const data = req[location];
+    const data =
+      location === 'body' && (req[location] === undefined || req[location] === null)
+        ? {}
+        : req[location];
     const result = schema.safeParse(data);
 
     if (!result.success) {

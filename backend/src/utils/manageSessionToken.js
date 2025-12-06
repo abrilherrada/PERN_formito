@@ -1,5 +1,10 @@
 import crypto from 'node:crypto';
-import { BadRequestError, UnauthorizedError } from './errors/httpErrors.js';
+import {
+  BadRequestError,
+  UnauthorizedError,
+  ForbiddenError
+} from './errors/httpErrors.js';
+import { UserRole } from '@prisma/client';
 
 const SESSION_TOKEN_DEFAULT_TTL = '7d';
 const SESSION_TOKEN_DURATION_REGEX = /^(\d+)([smhd])$/i;
@@ -74,4 +79,36 @@ export const assertSessionTokenActive = (sessionToken) => {
   if (sessionToken.expiresAt <= new Date()) {
     throw new UnauthorizedError('Refresh token expired', { code: 'SESSION_TOKEN_EXPIRED' });
   }
+};
+
+export const ensureSessionOwnership = (
+  sessionToken,
+  currentUser,
+  { requireAuthenticated = true, allowAdmin = true } = {}
+) => {
+  if (!sessionToken) {
+    throw new UnauthorizedError('Session token not found', { code: 'SESSION_TOKEN_NOT_FOUND' });
+  }
+
+  if (!currentUser) {
+    if (requireAuthenticated) {
+      throw new UnauthorizedError('Authentication required to manage sessions', {
+        code: 'SESSION_AUTH_REQUIRED',
+      });
+    }
+
+    return;
+  }
+
+  if (sessionToken.userId === currentUser.id) {
+    return;
+  }
+
+  if (allowAdmin && currentUser.role === UserRole.ADMIN) {
+    return;
+  }
+
+  throw new ForbiddenError('Cannot manage session for another user', {
+    code: 'SESSION_REVOKE_FORBIDDEN',
+  });
 };

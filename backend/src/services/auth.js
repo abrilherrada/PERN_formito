@@ -17,10 +17,12 @@ import {
   revokeSessionByRefreshToken,
   revokeAllTokensForUser,
 } from './sessionTokens.js';
+import { findSessionTokenByIdRepository } from '../repositories/sessionToken.js';
 import {
   updateUserRepository,
   findUserByEmailRepository,
-  findUserByIdRepository
+  findUserByIdRepository,
+  updateUserCredentialsTimestampRepository
 } from '../repositories/user.js';
 import {
   InternalServerError,
@@ -37,9 +39,12 @@ import {
   deleteTokensByUserIdService
 } from './verificationTokens.js';
 import { sendVerificationEmail } from './email/sendVerificationEmail.js';
-import { VerificationTokenType } from '@prisma/client';
-import { EntityStatus } from '@prisma/client';
+import {
+  VerificationTokenType,
+  EntityStatus
+} from '@prisma/client';
 import { sanitizeUser } from '../utils/sanitizeUser.js';
+import { ensureSessionOwnership } from '../utils/manageSessionToken.js';
 
 export const registerService = async (data) => {
   let verificationToken;
@@ -287,6 +292,8 @@ export const resetPasswordService = async (selector, tokenValue, newPassword) =>
       password: hashedPassword,
     });
 
+    await updateUserCredentialsTimestampRepository(token.userId);
+
     await deleteTokensByUserIdService(token.userId, VerificationTokenType.PASSWORD_RESET);
     await revokeAllTokensForUser(token.userId, { reason: 'USER_PASSWORD_RESET' });
 
@@ -345,7 +352,7 @@ export const refreshAccessTokenService = async (
   }
 };
 
-export const logoutService = async ({ refreshToken, sessionTokenId } = {}) => {
+export const logoutService = async ({ refreshToken, sessionTokenId, currentUser } = {}) => {
   if (!refreshToken && !sessionTokenId) {
     throw new BadRequestError('Refresh token or session token id is required', {
       code: 'SESSION_IDENTIFIER_REQUIRED',
@@ -357,7 +364,24 @@ export const logoutService = async ({ refreshToken, sessionTokenId } = {}) => {
 
     if (refreshToken) {
       const revoked = await revokeSessionByRefreshToken(refreshToken, { reason });
+      ensureSessionOwnership(revoked, currentUser, { requireAuthenticated: false });
       return { sessionTokenId: revoked.id, revoked: true };
+    }
+
+    const sessionToken = await findSessionTokenByIdRepository(sessionTokenId);
+
+    if (!sessionToken) {
+      throw new UnauthorizedError('Invalid session token id', {
+        code: 'SESSION_TOKEN_NOT_FOUND',
+      });
+    }
+
+    ensureSessionOwnership(sessionToken, currentUser);
+
+    if (sessionToken.revokedAt || sessionToken.expiresAt <= new Date()) {
+      throw new UnauthorizedError('Session token already invalidated', {
+        code: sessionToken.revokedAt ? 'SESSION_TOKEN_REVOKED' : 'SESSION_TOKEN_EXPIRED',
+      });
     }
 
     const revoked = await revokeSessionToken(sessionTokenId, { reason });
