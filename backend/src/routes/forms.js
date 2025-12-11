@@ -1,6 +1,10 @@
 import express from 'express';
 import multer from 'multer';
 import { normalizeSubmission } from '../middleware/normalizeSubmission.js';
+import {
+  submissionPerFormLimiter,
+  submissionGlobalIpLimiter,
+} from '../middleware/rateLimiters.js';
 import { verifyToken } from '../middleware/verifyToken.js';
 import { verifyAdmin } from '../middleware/verifyAdmin.js';
 import { validateRequest } from '../middleware/validateRequest.js';
@@ -37,6 +41,8 @@ const parseMultipart = multer().none();
 // Public
 router.post(
   '/:formId',
+  submissionGlobalIpLimiter,
+  submissionPerFormLimiter,
   parseMultipart,
   normalizeSubmission,
   validateRequest(submissionParamsSchema, 'params'),
