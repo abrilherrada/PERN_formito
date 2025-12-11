@@ -70,6 +70,48 @@ api.interceptors.request.use((config) => {
 
 > Nota: al desplegar, la cookie `Secure` requiere HTTPS y el dominio debe estar dentro de los permitidos por CORS.
 
+## Rate limiting
+
+Todos los endpoints sensibles usan `express-rate-limit` con un `MemoryStore` en cada proceso. Esto significa que:
+
+- Los contadores se resetean automáticamente cuando se reinicia la instancia.
+- En un despliegue con múltiples réplicas, cada proceso llevaría su propio conteo; para un store compartido habría que evaluar una solución centralizada más adelante.
+
+### Límites actuales
+
+| Endpoint / Contexto                             | Clave de rate limit             | Ventana    | Límite | Comentarios                                         |
+| ----------------------------------------------- | ------------------------------- | ---------- | ------ | --------------------------------------------------- |
+| `POST /api/auth/login` (por IP)                 | IP                              | 15 minutos | 10     | Combina con el limitador por cuenta.                |
+| `POST /api/auth/login` (por cuenta)             | `login-account:<email>`         | 15 minutos | 5      | Solo cuenta intentos fallidos y bloquea al usuario. |
+| `POST /api/auth/register`                       | IP                              | 1 hora     | 5      | Evita registros masivos desde la misma IP.          |
+| `POST /api/auth/reset-password` (por email)     | `password-reset:<email>`        | 10 minutos | 1      | Fuerza un enfriamiento entre envíos.                |
+| `POST /api/auth/reset-password` (por IP)        | IP                              | 1 hora     | 3      | Cubre intentos de fuerza bruta por IP.              |
+| `POST /api/auth/resend-verification` (cooldown) | `verification-cooldown:<email>` | 2 minutos  | 1      | Evita spam inmediato al mismo correo.               |
+| `POST /api/auth/resend-verification` (hourly)   | `verification-hour:<email>`     | 1 hora     | 5      | Limita envíos reiterados al mismo correo.           |
+| `POST /api/auth/resend-verification` (por IP)   | IP                              | 1 hora     | 20     | Controla abuso desde una misma IP.                  |
+| `POST /api/auth/refresh`                        | IP                              | 1 minuto   | 20     | Protege contra abuso de refresh tokens.             |
+| `POST /api/auth/logout`                         | IP                              | 1 minuto   | 20     | Evita floods de logout.                             |
+| `POST /api/forms/:formId` (por formulario)      | `<formId>:<ip>`                 | 1 minuto   | 10     | Limita envíos repetidos a un mismo formulario.      |
+| `POST /api/forms/:formId` (global por IP)       | IP                              | 1 hora     | 100    | Limita envíos globales desde una IP.                |
+
+### Respuesta cuando se excede el límite
+
+Los limitadores devuelven `HTTP 429` con el body uniforme:
+
+```json
+{
+ "message": "Too many login attempts from this IP. Please wait 15 minutes.",
+ "code": "RATE_LIMIT_EXCEEDED",
+ "retryAfter": 900
+}
+```
+
+- `message` describe el motivo (personalizado por endpoint).
+- `code` siempre es `RATE_LIMIT_EXCEEDED`.
+- `retryAfter` se envía en segundos cuando la información está disponible. También se incluye el header `Retry-After`.
+
+El frontend debe manejar `429` mostrando el mensaje y, opcionalmente, un contador basado en `retryAfter`.
+
 ## Purga de datos eliminados
 
 Para ejecutar la limpieza de registros soft-deleted después del período de retención:
