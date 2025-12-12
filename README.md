@@ -19,6 +19,12 @@
    - Reseteo de contraseña, cambios de credenciales, suspensiones o eliminaciones actualizan `credentialsUpdatedAt` y revocan todas las sesiones con el motivo correspondiente.
    - Cualquier access token emitido antes de esa marca se rechaza con `TOKEN_STALE`.
 
+### Política de contraseñas
+
+- Longitud mínima: 10 caracteres.
+- Debe incluir al menos una letra minúscula, una mayúscula, un número y un carácter especial.
+- En un reset de contraseña, el backend rechaza reutilizar la contraseña actual y responde con código `AUTH_PASSWORD_REUSED`.
+
 ### Endpoints relacionados
 
 | Endpoint                                         | Expectativas                                                           |

@@ -36,6 +36,7 @@ import {
   createTokenService,
   deleteTokenService,
   consumeTokenService,
+  findTokenBySelectorService,
   deleteTokensByUserIdService
 } from './verificationTokens.js';
 import { sendVerificationEmail } from './email/sendVerificationEmail.js';
@@ -283,6 +284,22 @@ export const requestPasswordResetService = async (email) => {
 
 export const resetPasswordService = async (selector, tokenValue, newPassword) => {
   try {
+    const pendingToken = await findTokenBySelectorService(selector);
+
+    const account = await findUserByIdRepository(pendingToken.userId, { includeDeleted: true });
+
+    if (!account || account.status === EntityStatus.DELETED) {
+      throw new NotFoundError('User not found', { code: 'AUTH_USER_NOT_FOUND' });
+    }
+
+    const isSamePassword = await bcrypt.compare(newPassword, account.password ?? '');
+
+    if (isSamePassword) {
+      throw new BadRequestError('New password must be different from current password', {
+        code: 'AUTH_PASSWORD_REUSED',
+      });
+    }
+
     const token = await consumeTokenService(selector, tokenValue, VerificationTokenType.PASSWORD_RESET);
 
     const SALT_ROUNDS = parseInt(process.env.BCRYPT_SALT_ROUNDS, 10) || 12;
