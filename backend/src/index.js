@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import express from 'express';
+import helmet from 'helmet';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import authRouter from './routes/auth.js';
@@ -12,6 +13,25 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT;
+
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+    crossOriginEmbedderPolicy: false,
+    crossOriginOpenerPolicy: false,
+    contentSecurityPolicy: false,
+    hsts: false,
+    referrerPolicy: { policy: 'no-referrer' },
+    permissionsPolicy: {
+      features: {
+        camera: [],
+        microphone: [],
+        geolocation: []
+      }
+    }
+  })
+);
+app.disable('x-powered-by');
 
 app.use(cors());
 app.use(cookieParser());
