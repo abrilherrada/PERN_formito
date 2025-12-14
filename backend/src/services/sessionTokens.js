@@ -2,7 +2,9 @@ import {
   createSessionTokenRepository,
   findSessionTokenByHashRepository,
   updateSessionTokenRepository,
-  revokeSessionTokensForUserRepository
+  revokeSessionTokensForUserRepository,
+  findActiveSessionTokensByUserRepository,
+  revokeSessionTokensByIdsRepository,
 } from '../repositories/sessionToken.js';
 import { BadRequestError, UnauthorizedError } from '../utils/errors/httpErrors.js';
 import { handlePrismaError } from '../utils/errors/prismaErrors.js';
@@ -13,6 +15,40 @@ import {
   hashSessionTokenValue,
 } from '../utils/manageSessionToken.js';
 
+const MAX_ACTIVE_SESSION_TOKENS = Number(process.env.MAX_ACTIVE_SESSION_TOKENS ?? 20);
+
+const enforceSessionTokenCap = async (
+  userId,
+  { excludeIds = [], pendingRevocations = 0 } = {}
+) => {
+  if (!MAX_ACTIVE_SESSION_TOKENS || MAX_ACTIVE_SESSION_TOKENS <= 0) {
+    return;
+  }
+
+  const activeTokens = await findActiveSessionTokensByUserRepository(userId);
+  const totalExcess = activeTokens.length - MAX_ACTIVE_SESSION_TOKENS - pendingRevocations;
+
+  if (totalExcess <= 0) {
+    return;
+  }
+
+  const candidates = activeTokens.filter(({ id }) => !excludeIds.includes(id));
+
+  if (!candidates.length) {
+    return;
+  }
+
+  const idsToRevoke = candidates.slice(0, totalExcess).map(({ id }) => id);
+
+  if (!idsToRevoke.length) {
+    return;
+  }
+
+  await revokeSessionTokensByIdsRepository(idsToRevoke, {
+    revokedReason: 'SESSION_LIMIT_EXCEEDED',
+  });
+};
+
 export const createSessionToken = async (userId, options = {}) => {
   if (!userId) {
     throw new BadRequestError('User id is required to create a session token', {
@@ -21,7 +57,7 @@ export const createSessionToken = async (userId, options = {}) => {
   }
 
   const { userAgent = null, ipAddress = null, rotatedFromId } = options;
-  
+
   try {
     const token = generateSessionTokenValue();
     const tokenHash = hashSessionTokenValue(token);
@@ -33,6 +69,11 @@ export const createSessionToken = async (userId, options = {}) => {
       userAgent,
       ipAddress,
       rotatedFromId,
+    });
+
+    await enforceSessionTokenCap(userId, {
+      excludeIds: [sessionToken.id],
+      pendingRevocations: rotatedFromId ? 1 : 0,
     });
 
     return { token, sessionToken };
@@ -70,6 +111,11 @@ export const rotateSessionToken = async (refreshToken, options = {}) => {
       replacedByToken: {
         connect: { id: newSessionToken.id },
       },
+    });
+
+    await enforceSessionTokenCap(existingToken.userId, {
+      excludeIds: [newSessionToken.id],
+      pendingRevocations: 1,
     });
 
     return { token: newToken, sessionToken: newSessionToken, previousToken: existingToken };

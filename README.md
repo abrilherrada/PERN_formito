@@ -11,6 +11,7 @@
 3. **Rotación del refresh (`POST /api/auth/refresh`)**
    - Acepta cookie o body `{ refreshToken }`.
    - Valida que la sesión no esté revocada/expirada, genera nuevo access + refresh, marca el token anterior con `revokedReason="ROTATED"` y enlaza el nuevo.
+   - Aplica un tope de 20 refresh tokens activos por usuario: al emitir uno nuevo se revocan automáticamente los más antiguos (manteniendo vigente el recién generado).
 4. **Logout (`POST /api/auth/logout`)**
    - Identificador vía cookie, body o `sessionTokenId`.
    - Revoca la sesión con motivo `LOGOUT` y limpia la cookie.
@@ -27,14 +28,14 @@
 
 ### Endpoints relacionados
 
-| Endpoint                                         | Expectativas                                                           |
-| ------------------------------------------------ | ---------------------------------------------------------------------- |
-| `POST /api/auth/login`                           | Devuelve access token + cookie de refresh.                             |
-| `POST /api/auth/refresh`                         | Requiere refresh token (cookie o body).                                |
-| `POST /api/auth/logout`                          | Identificador vía cookie/body; `sessionTokenId` requiere access token. |
-| `GET /api/users/me`                              | Requiere access token vigente.                                         |
-| `PATCH /api/users/me`                            | Cambios que afecten credenciales revocan sesiones automáticamente.     |
-| `PATCH /api/users/:id` / `DELETE /api/users/:id` | Flujos administrativos con revocación y marca de timestamp.            |
+| Endpoint                                         | Expectativas                                                                 |
+| ------------------------------------------------ | ---------------------------------------------------------------------------- |
+| `POST /api/auth/login`                           | Devuelve access token + cookie de refresh y respeta el tope de sesiones.     |
+| `POST /api/auth/refresh`                         | Requiere refresh token (cookie o body) y al superar el tope revoca sesiones. |
+| `POST /api/auth/logout`                          | Identificador vía cookie/body; `sessionTokenId` requiere access token.       |
+| `GET /api/users/me`                              | Requiere access token vigente.                                               |
+| `PATCH /api/users/me`                            | Cambios que afecten credenciales revocan sesiones automáticamente.           |
+| `PATCH /api/users/:id` / `DELETE /api/users/:id` | Flujos administrativos con revocación y marca de timestamp.                  |
 
 ## Uso de cookies con Axios (frontend)
 

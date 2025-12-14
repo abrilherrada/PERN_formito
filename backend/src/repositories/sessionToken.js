@@ -95,3 +95,48 @@ export const revokeSessionTokensForUserRepository = async (
     data,
   });
 };
+
+export const findActiveSessionTokensByUserRepository = async (userId) => {
+  return await prisma.sessionToken.findMany({
+    where: {
+      userId,
+      revokedAt: null,
+      expiresAt: {
+        gt: new Date(),
+      },
+    },
+    orderBy: {
+      createdAt: 'asc',
+    },
+    select: {
+      id: true,
+      createdAt: true,
+    },
+  });
+};
+
+export const revokeSessionTokensByIdsRepository = async (
+  ids,
+  { revokedAt = new Date(), revokedReason } = {}
+) => {
+  if (!ids.length) {
+    return { count: 0 };
+  }
+
+  const data = {
+    revokedAt,
+  };
+
+  if (revokedReason !== undefined) {
+    data.revokedReason = revokedReason;
+  }
+
+  return await prisma.sessionToken.updateMany({
+    where: {
+      id: {
+        in: ids,
+      },
+    },
+    data,
+  });
+};
